@@ -1,0 +1,52 @@
+[package]
+name = "examples"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "banknote"
+path = "src/banknote.rs"
+
+[[bin]]
+name = "xor"
+path = "src/xor.rs"
+
+[[bin]]
+name = "ddos"
+path = "src/ddos.rs"
+
+[[bin]]
+name = "ddos_udp"
+path = "src/ddos_udp.rs"
+
+
+[dependencies]
+ennigma = { path = "../ennigma", default-features = false }
+rand = "0.8"
+rand_distr = "0.4"
+serde_json = "1.0"
+csv = "1.0"
+rand_chacha = "0.3"
+dotenv = "0.15"
+
+tokio = { version = "1.28", optional = true, features = ["macros", "rt"] }
+
+[features]
+default = ["neuralnetwork", "tokio", "x86_64", "rand"]
+
+neuralnetwork =  ["ennigma/neuralnetwork"]
+tokio =  ["ennigma/tokio", "dep:tokio"]
+rayon =  ["ennigma/rayon"]
+x86_64 = ["ennigma/x86_64"]
+wasm = ["ennigma/wasm"]
+rand = ["ennigma/rand"]
+plaintext = ["ennigma/plaintext"]
+
+profiling = ["ennigma/profiling"]
+# nightly
+avx512 = ["ennigma/avx512"]

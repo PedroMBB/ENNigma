@@ -1,0 +1,35 @@
+[package]
+name = "ennigma"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+neuralnetworks = { path = "../neuralnetworks", default-features = false }
+crypto = { path = "../crypto", default-features = false }
+numbers = { path = "../numbers", default-features = false }
+
+rand = { version = "0.8", optional = true }
+rand_distr = { version = "0.4", optional = true }
+crossterm = { version = "0.26", optional = true }
+serde_json = "1.0"
+csv = "1.0"
+rand_chacha = "0.3"
+
+[features]
+default = ["neuralnetwork", "tokio", "x86_64", "rand"]
+
+plaintext = []
+
+neuralnetwork =  ["neuralnetworks/neuralnetwork"]
+tokio =  ["neuralnetworks/tokio"]
+rayon =  ["neuralnetworks/rayon"]
+x86_64 = ["crypto/x86_64", "dep:crossterm"]
+wasm = ["crypto/wasm"]
+rand = ["dep:rand", "dep:rand_distr", "numbers/rand", "crypto/rand", "neuralnetworks/rand"]
+
+profiling = ["neuralnetworks/profiling"]
+
+# nightly
+avx512 = ["crypto/avx512"]

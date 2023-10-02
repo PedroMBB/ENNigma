@@ -1,0 +1,15 @@
+[package]
+name = "crypto_performance"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+numbers = { path = "../../numbers" }
+neuralnetworks = { path = "../../neuralnetworks" }
+crypto = { path = ".."  }
+clap = { version = "4.2", features = ["derive"] }
+
+[features]
+default = []
+avx512 = ["crypto/avx512"]

@@ -1,0 +1,12 @@
+[workspace]
+
+members = [
+    "numbers",
+    "neuralnetworks",
+    "crypto",
+    "crypto/performance",
+    "ennigma",
+    "_examples",
+]
+
+resolver = "2"
