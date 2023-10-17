@@ -1,4 +1,4 @@
-use crypto::{EncryptedBit, EncryptedContext};
+use crypto::EncryptedFixedPointNumber;
 use neuralnetworks::layers::FeedForwardFullyConnectedLayer;
 
 pub type CryptoFFFFLayer<
@@ -10,11 +10,7 @@ pub type CryptoFFFFLayer<
     AF,
     LOSS,
 > = FeedForwardFullyConnectedLayer<
-    EncryptedBit,
-    EncryptedContext,
-    SIZE,
-    CALC_SIZE,
-    PRECISION,
+    EncryptedFixedPointNumber<SIZE, PRECISION>,
     PREV_N,
     CURR_N,
     AF,

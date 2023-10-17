@@ -56,34 +56,32 @@ fn execute_functions<const S: usize, const P: usize>(
         let v2 = EncryptedFixedPointNumber::from_ctx(pv2, client_ctx).switch_context(server_ctx);
 
         exec.execute(&name, "SHIFT_ACT", "AIO", 0.0, || {
-            <SigmoidMyersAproxAF as ActivationFn<
-                EncryptedFixedPointNumber<S, P>,
-                EncryptedContext,
-                1,
-            >>::activate(&mayer_shft, server_ctx, v1.clone());
+            <SigmoidMyersAproxAF as ActivationFn<EncryptedFixedPointNumber<S, P>, 1>>::activate(
+                &mayer_shft,
+                server_ctx,
+                v1.clone(),
+            );
             v2.clone()
         });
         exec.execute(&name, "SHIFT_DER", "AIO", 0.0, || {
             <SigmoidMyersAproxAF as ActivationFn<
                 EncryptedFixedPointNumber<S, P>,
-                EncryptedContext,
                 1,
             >>::activate_and_derivative(&mayer_shft, server_ctx, v2.clone());
             v1.clone()
         });
 
         exec.execute(&name, "MUL_ACT", "AIO", 0.0, || {
-            <SigmoidMyersMulAproxAF as ActivationFn<
-                EncryptedFixedPointNumber<S, P>,
-                EncryptedContext,
-                1,
-            >>::activate(&mayer_mul, server_ctx, v1.clone());
+            <SigmoidMyersMulAproxAF as ActivationFn<EncryptedFixedPointNumber<S, P>, 1>>::activate(
+                &mayer_mul,
+                server_ctx,
+                v1.clone(),
+            );
             v2.clone()
         });
         exec.execute(&name, "MUL_DER", "AIO", 0.0, || {
             <SigmoidMyersMulAproxAF as ActivationFn<
                 EncryptedFixedPointNumber<S, P>,
-                EncryptedContext,
                 1,
             >>::activate_and_derivative(&mayer_mul, server_ctx, v2.clone());
             v1.clone()

@@ -31,9 +31,10 @@ mod test {
     fn mult_enc() {
         type Num = EncryptedFixedPrecision<12, 2>;
 
+        let plain_ctx = Arc::new(());
         let ctx = Arc::new(EncryptedContext::new().remove_server_key());
 
-        let arr1: Gen2DArray<Num, EncryptedContext, 7, 6> = FromWithContext::from_ctx(
+        let arr1: Gen2DArray<Num, 7, 6> = FromWithContext::from_ctx(
             Gen2DArray::from_array(
                 [
                     [12.0, 7.0, 10.0, 4.0, 5.0, 8.0],
@@ -44,12 +45,12 @@ mod test {
                     [9.0, 7.0, 8.0, 14.0, 11.0, 6.0],
                     [8.0, 14.0, 10.0, 9.0, 7.0, 8.0],
                 ],
-                &ctx,
+                &plain_ctx,
             ),
             &ctx,
         );
 
-        let arr2: Gen2DArray<Num, EncryptedContext, 6, 7> = FromWithContext::from_ctx(
+        let arr2: Gen2DArray<Num, 6, 7> = FromWithContext::from_ctx(
             Gen2DArray::from_array(
                 [
                     [1.0, 5.0, 7.0, 9.0, 5.0, 6.0, 0.0],
@@ -59,7 +60,7 @@ mod test {
                     [4.0, 7.0, 2.0, 7.0, 4.0, 0.0, 3.0],
                     [3.0, 5.0, 8.0, 0.0, 0.0, 7.0, 0.0],
                 ],
-                &ctx,
+                &plain_ctx,
             ),
             &ctx,
         );
@@ -72,12 +73,12 @@ mod test {
             Instant::now().duration_since(start).as_secs_f64()
         );
 
-        let received: Gen2DArray<f32, EncryptedContext, 7, 7> =
-            emc_received.apply(|v| v.clone().into());
+        let received: Gen2DArray<f32, 7, 7> =
+            emc_received.apply_with_context(&plain_ctx, |_ctx, v| v.clone().into());
 
-        received.apply(|v| {
+        received.apply_with_context(&plain_ctx, |_, v| {
             assert!(v - v == 0.0);
-            ()
+            0.0
         });
     }
 
@@ -108,19 +109,20 @@ mod test {
 
     #[test]
     fn mat_mult_enc_small() {
+        let plain_ctx = Arc::new(());
         let ctx = Arc::new(EncryptedContext::new().remove_server_key());
 
-        let arr1: Gen2DArray<EncryptedFixedPrecision<10, 2>, EncryptedContext, 2, 3> =
-            FromWithContext::from_ctx(
-                Gen2DArray::from_array([[5.0, 3.0, 7.0], [4.0, 7.0, 3.0]], &ctx),
-                &ctx,
-            );
+        let arr1: Gen2DArray<EncryptedFixedPrecision<10, 2>, 2, 3> = FromWithContext::from_ctx(
+            Gen2DArray::from_array([[5.0, 3.0, 7.0], [4.0, 7.0, 3.0]], &plain_ctx),
+            &ctx,
+        );
 
-        let arr2: Gen2DArray<EncryptedFixedPrecision<10, 2>, EncryptedContext, 3, 1> =
-            FromWithContext::from_ctx(Gen2DArray::from_array([[4.0], [0.0], [9.0]], &ctx), &ctx);
+        let arr2: Gen2DArray<EncryptedFixedPrecision<10, 2>, 3, 1> = FromWithContext::from_ctx(
+            Gen2DArray::from_array([[4.0], [0.0], [9.0]], &plain_ctx),
+            &ctx,
+        );
 
-        let exp: Gen2DArray<f32, EncryptedContext, 2, 1> =
-            Gen2DArray::from_array([[83.0], [43.0]], &ctx);
+        let exp: Gen2DArray<f32, 2, 1> = Gen2DArray::from_array([[83.0], [43.0]], &plain_ctx);
 
         println!("Calculating");
 
@@ -133,12 +135,12 @@ mod test {
             Instant::now().duration_since(start).as_secs_f64()
         );
 
-        let received: Gen2DArray<f32, EncryptedContext, 2, 1> =
-            emc_received.apply(|v| v.clone().into());
+        let received: Gen2DArray<f32, 2, 1> =
+            emc_received.apply_with_context(&plain_ctx, |_, v| v.clone().into());
 
         received.apply_zip(&exp, |(v, exp)| {
             assert_eq!(v, exp);
-            ()
+            0.0
         });
     }
 

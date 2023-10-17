@@ -5,12 +5,14 @@ use std::{
     sync::Arc,
 };
 
-use crate::{DefaultWithContext, FromWithContext, Gen2DArray, Sqrt};
+use crate::{DefaultWithContext, FromWithContext, Gen2DArray, NumberType, Sqrt};
 
-pub type Gen1DArray<T, C, const SIZE: usize> = Gen2DArray<T, C, 1, SIZE>;
+pub type Gen1DArray<T, const SIZE: usize> = Gen2DArray<T, 1, SIZE>;
 
-impl<T, C, const SIZE: usize> FromWithContext<Vec<T>, C> for Gen1DArray<T, C, SIZE> {
-    fn from_ctx(lst: Vec<T>, ctx: &Arc<C>) -> Self {
+impl<T: NumberType, const SIZE: usize> FromWithContext<Vec<T>, T::ContextType>
+    for Gen1DArray<T, SIZE>
+{
+    fn from_ctx(lst: Vec<T>, ctx: &Arc<T::ContextType>) -> Self {
         if lst.len() != SIZE {
             panic!("[Gen1DArray] From<Vec<_>> cannot handle vectors with length ({}) different from size ({})", lst.len(), SIZE);
         }
@@ -26,7 +28,7 @@ impl<T, C, const SIZE: usize> FromWithContext<Vec<T>, C> for Gen1DArray<T, C, SI
     }
 }
 
-impl<T: DefaultWithContext<C>, C, const COLS: usize> Gen1DArray<T, C, COLS>
+impl<T: NumberType + DefaultWithContext<T::ContextType>, const COLS: usize> Gen1DArray<T, COLS>
 where
     for<'a> &'a T: Add<&'a T, Output = T>,
     for<'a> &'a T: Mul<&'a T, Output = T>,
@@ -45,17 +47,17 @@ where
     }
 }
 
-impl<T: Clone, C, const SIZE: usize> Into<Vec<T>> for &Gen1DArray<T, C, SIZE> {
+impl<T: NumberType + Clone, const SIZE: usize> Into<Vec<T>> for &Gen1DArray<T, SIZE> {
     fn into(self) -> Vec<T> {
         self.contents.iter().cloned().collect()
     }
 }
-impl<'a, T, C, const SIZE: usize> Into<Vec<&'a T>> for &'a Gen1DArray<T, C, SIZE> {
+impl<'a, T: NumberType, const SIZE: usize> Into<Vec<&'a T>> for &'a Gen1DArray<T, SIZE> {
     fn into(self) -> Vec<&'a T> {
         self.contents.iter().collect()
     }
 }
-impl<T: Clone, C, const SIZE: usize> Gen1DArray<T, C, SIZE> {
+impl<T: NumberType + Clone, const SIZE: usize> Gen1DArray<T, SIZE> {
     pub fn as_1d_array(self) -> [T; SIZE] {
         let new_arr: [T; SIZE] = array![i => self.contents[i].clone(); SIZE];
 

@@ -5,19 +5,23 @@ pub trait SerializableModel {
     fn set_weights(&mut self, weights: ModelWeights);
 }
 
-pub trait ActivationFn<T, C, const N: usize>: std::fmt::Debug + Sync + Send {
-    fn activate(&self, ctx: &Arc<C>, v: T) -> T;
-    fn activate_and_derivative(&self, ctx: &Arc<C>, v: T) -> (T, T);
+pub trait ActivationFn<T: NumberType, const N: usize>: std::fmt::Debug + Sync + Send {
+    fn activate(&self, ctx: &Arc<T::ContextType>, v: T) -> T;
+    fn activate_and_derivative(&self, ctx: &Arc<T::ContextType>, v: T) -> (T, T);
 
-    fn activate_multiple(&self, ctx: &Arc<C>, lst: Gen1DArray<T, C, N>) -> Gen1DArray<T, C, N>;
+    fn activate_multiple(
+        &self,
+        ctx: &Arc<T::ContextType>,
+        lst: Gen1DArray<T, N>,
+    ) -> Gen1DArray<T, N>;
     fn activate_and_derivative_multiple(
         &self,
-        ctx: &Arc<C>,
-        lst: Gen1DArray<T, C, N>,
-    ) -> (Gen1DArray<T, C, N>, Gen1DArray<T, C, N>);
+        ctx: &Arc<T::ContextType>,
+        lst: Gen1DArray<T, N>,
+    ) -> (Gen1DArray<T, N>, Gen1DArray<T, N>);
 }
 use chrono::NaiveDateTime;
-use numbers::Gen1DArray;
+use numbers::{Gen1DArray, NumberType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize, PartialEq, Clone)]

@@ -24,6 +24,10 @@ pub trait BooleanType<T>:
 {
 }
 
+pub trait NumberType {
+    type ContextType;
+}
+
 pub trait RefBitAnd<Rhs = Self> {
     type Output;
     fn and(&self, rhs: &Rhs) -> Self::Output;
@@ -51,6 +55,10 @@ pub trait IsGreater {
 pub trait Equal {
     fn equal(&self, rhs: &Self) -> Self;
 }
+
+/*
+    Boolean Operations
+*/
 
 pub trait BooleanRefOperations {
     #[deprecated]
@@ -124,6 +132,13 @@ pub trait Mux {
     fn mux(&self, yes: &Self::Output, no: &Self::Output) -> Self::Output;
 }
 
+/*
+
+Number Operations
+
+*/
+
+// TODO: Replace by FromWithContext and create different types for server and client contexts
 pub trait SwitchContext<C> {
     fn switch_context(&self, ctx: &Arc<C>) -> Self;
 }
@@ -169,6 +184,13 @@ impl<C> OneWithContext<C> for f32 {
     }
 }
 
+impl NumberType for f32 {
+    type ContextType = ();
+}
+
+impl NumberType for i32 {
+    type ContextType = ();
+}
 pub trait AddContext<C> {
     type FromType;
     fn add_context(t: &Self::FromType, ctx: &Arc<C>) -> Self;

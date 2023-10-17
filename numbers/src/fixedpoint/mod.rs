@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 
-use crate::BooleanType;
+use crate::{BooleanType, NumberType};
 
 mod implementations;
 mod operations;
@@ -22,6 +22,12 @@ pub struct FixedPointNumberNoContext<const SIZE: usize, const PRECISION: usize, 
     size: PhantomData<[usize; SIZE]>,
     #[serde(default = "PhantomData::default")]
     precision: PhantomData<[usize; PRECISION]>,
+}
+
+impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C> NumberType
+    for FixedPointNumber<SIZE, PRECISION, T, C>
+{
+    type ContextType = C;
 }
 
 impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C> + Serialize, C> Serialize

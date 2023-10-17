@@ -1,4 +1,4 @@
-use crate::{AddContext, Gen2DArray};
+use crate::{AddContext, Gen2DArray, NumberType};
 use serde::{de::Visitor, Deserialize};
 use std::{marker::PhantomData, sync::Arc};
 
@@ -9,11 +9,15 @@ pub struct Gen2DArrayNoContext<T, const ROWS: usize, const COLS: usize> {
     cols: PhantomData<[T; COLS]>,
 }
 
-impl<T: AddContext<C, FromType = T1>, T1, C, const ROWS: usize, const COLS: usize> AddContext<C>
-    for Gen2DArray<T, C, ROWS, COLS>
+impl<
+        T: NumberType + AddContext<T::ContextType, FromType = T1>,
+        T1,
+        const ROWS: usize,
+        const COLS: usize,
+    > AddContext<T::ContextType> for Gen2DArray<T, ROWS, COLS>
 {
     type FromType = Gen2DArrayNoContext<T1, ROWS, COLS>;
-    fn add_context(t: &Self::FromType, ctx: &Arc<C>) -> Self {
+    fn add_context(t: &Self::FromType, ctx: &Arc<T::ContextType>) -> Self {
         Self {
             contents: t
                 .contents

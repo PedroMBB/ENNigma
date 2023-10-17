@@ -13,16 +13,16 @@ pub type ModelType<
     const PRECISION: usize,
     const INPUT_N: usize,
     const OUTPUT_N: usize,
-> = Model<BoolFixedPointNumber<SIZE, PRECISION>, ContextType, INPUT_N, OUTPUT_N>;
+> = Model<BoolFixedPointNumber<SIZE, PRECISION>, INPUT_N, OUTPUT_N>;
 
 pub type Gen2DArrayType<
     const SIZE: usize,
     const PRECISION: usize,
     const ROWS: usize,
     const COLS: usize,
-> = Gen2DArray<BoolFixedPointNumber<SIZE, PRECISION>, ContextType, ROWS, COLS>;
+> = Gen2DArray<BoolFixedPointNumber<SIZE, PRECISION>, ROWS, COLS>;
 pub type Gen1DArrayType<const SIZE: usize, const PRECISION: usize, const ROWS: usize> =
-    Gen1DArray<BoolFixedPointNumber<SIZE, PRECISION>, ContextType, ROWS>;
+    Gen1DArray<BoolFixedPointNumber<SIZE, PRECISION>, ROWS>;
 
 pub type FFFFLayerType<
     const BITS: usize,
@@ -56,7 +56,7 @@ pub fn to_plaintext_array<
 >(
     arr: &Gen2DArrayType<SIZE, PRECISION, ROWS, COLS>,
     client_ctx: &Arc<ContextType>,
-) -> Gen2DArray<f32, (), ROWS, COLS> {
+) -> Gen2DArray<f32, ROWS, COLS> {
     arr.apply_with_context(&Arc::new(()), |_, v| {
         v.clone().switch_context(client_ctx).into()
     })

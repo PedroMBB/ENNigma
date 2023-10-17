@@ -1,4 +1,5 @@
 use array_macro::array;
+use num_traits::MulAdd;
 use serde::Serialize;
 use std::{
     fmt::Debug,
@@ -7,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{Abs, BooleanType, DefaultWithContext, FixedPointNumber, FromWithContext};
+use crate::{Abs, BooleanType, DefaultWithContext, FixedPointNumber, FromWithContext, NumberType};
 
 mod gen1darray;
 pub use gen1darray::Gen1DArray;
@@ -15,15 +16,15 @@ pub use gen1darray::Gen1DArray;
 mod noctx;
 pub use noctx::Gen2DArrayNoContext;
 
-pub struct Gen2DArray<T, C, const ROWS: usize, const COLS: usize> {
+pub struct Gen2DArray<T: NumberType, const ROWS: usize, const COLS: usize> {
     contents: Box<[T]>,
-    context: Arc<C>,
+    context: Arc<T::ContextType>,
     rows: PhantomData<[T; ROWS]>,
     cols: PhantomData<[T; COLS]>,
 }
 
-impl<T: Serialize, const ROWS: usize, const COLS: usize, C> Serialize
-    for Gen2DArray<T, C, ROWS, COLS>
+impl<T: NumberType + Serialize, const ROWS: usize, const COLS: usize> Serialize
+    for Gen2DArray<T, ROWS, COLS>
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -36,11 +37,11 @@ impl<T: Serialize, const ROWS: usize, const COLS: usize, C> Serialize
 }
 
 #[cfg(feature = "rand")]
-impl<T: Clone, const ROWS: usize, const COLS: usize, C> Gen2DArray<T, C, ROWS, COLS> {
+impl<T: Clone + NumberType, const ROWS: usize, const COLS: usize> Gen2DArray<T, ROWS, COLS> {
     pub fn random(
         rand: &mut dyn rand::RngCore,
         generator: impl Fn(&mut dyn rand::RngCore) -> T,
-        ctx: &Arc<C>,
+        ctx: &Arc<T::ContextType>,
     ) -> Self {
         let size = COLS * ROWS;
 
@@ -53,22 +54,22 @@ impl<T: Clone, const ROWS: usize, const COLS: usize, C> Gen2DArray<T, C, ROWS, C
     }
 }
 
-impl<T: Clone, const ROWS: usize, const COLS: usize, C> Gen2DArray<T, C, ROWS, COLS> {
+impl<T: NumberType + Clone, const ROWS: usize, const COLS: usize> Gen2DArray<T, ROWS, COLS> {
     pub fn as_array(&self) -> [[T; COLS]; ROWS] {
         array![i => array![j =>self.contents[i * COLS + j].clone(); COLS]; ROWS]
     }
 }
-impl<T: Clone, const ROWS: usize, const COLS: usize, C> Gen2DArray<T, C, ROWS, COLS> {
+impl<T: NumberType + Clone, const ROWS: usize, const COLS: usize> Gen2DArray<T, ROWS, COLS> {
     pub fn as_slice(&self) -> [[&T; COLS]; ROWS] {
         array![i => array![j => &self.contents[i * COLS + j]; COLS]; ROWS]
     }
 }
-impl<T: Debug, C, const N1: usize, const N2: usize> Debug for Gen2DArray<T, C, N1, N2> {
+impl<T: NumberType + Debug, const N1: usize, const N2: usize> Debug for Gen2DArray<T, N1, N2> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", self.contents))
     }
 }
-impl<T: Clone, C, const N1: usize, const N2: usize> Clone for Gen2DArray<T, C, N1, N2> {
+impl<T: NumberType + Clone, const N1: usize, const N2: usize> Clone for Gen2DArray<T, N1, N2> {
     fn clone(&self) -> Self {
         Self {
             contents: self.contents.clone(),
@@ -79,8 +80,8 @@ impl<T: Clone, C, const N1: usize, const N2: usize> Clone for Gen2DArray<T, C, N
     }
 }
 
-impl<T, C, const ROWS: usize, const COLS: usize> Gen2DArray<T, C, ROWS, COLS> {
-    pub fn from_array(contents: [[T; COLS]; ROWS], ctx: &Arc<C>) -> Self {
+impl<T: NumberType, const ROWS: usize, const COLS: usize> Gen2DArray<T, ROWS, COLS> {
+    pub fn from_array(contents: [[T; COLS]; ROWS], ctx: &Arc<T::ContextType>) -> Self {
         let contents = contents
             .into_iter()
             .map(|v| v.into_iter())
@@ -96,11 +97,11 @@ impl<T, C, const ROWS: usize, const COLS: usize> Gen2DArray<T, C, ROWS, COLS> {
     }
 }
 
-impl<T, C, const ROWS: usize, const COLS: usize> Gen2DArray<T, C, ROWS, COLS>
+impl<T: NumberType, const ROWS: usize, const COLS: usize> Gen2DArray<T, ROWS, COLS>
 where
     for<'a> &'a T: Mul<&'a T, Output = T>,
 {
-    pub fn hadamard_prod(mut self, rhs: &Gen2DArray<T, C, ROWS, COLS>) -> Self {
+    pub fn hadamard_prod(mut self, rhs: &Gen2DArray<T, ROWS, COLS>) -> Self {
         self.contents
             .iter_mut()
             .zip(rhs.contents.iter())
@@ -110,8 +111,8 @@ where
     }
 }
 
-impl<T: Clone, C, const ROWS: usize, const COLS: usize> Gen2DArray<T, C, ROWS, COLS> {
-    pub fn transpose(&self) -> Gen2DArray<T, C, COLS, ROWS> {
+impl<T: NumberType + Clone, const ROWS: usize, const COLS: usize> Gen2DArray<T, ROWS, COLS> {
+    pub fn transpose(&self) -> Gen2DArray<T, COLS, ROWS> {
         let contents = (0..COLS)
             .map(|col| (0..ROWS).map(move |row| self.contents[row * COLS + col].clone()))
             .flatten()
@@ -207,12 +208,12 @@ where
 */
 
 impl<T: BooleanType<C>, C, const S: usize, const P: usize, const N1: usize, const N2: usize>
-    Gen2DArray<FixedPointNumber<S, P, T, C>, C, N1, N2>
+    Gen2DArray<FixedPointNumber<S, P, T, C>, N1, N2>
 {
     pub fn mul_opt<const N3: usize>(
         mut self,
-        rhs: &Gen2DArray<FixedPointNumber<S, P, T, C>, C, N2, N3>,
-    ) -> Gen2DArray<FixedPointNumber<S, P, T, C>, C, N1, N3> {
+        rhs: &Gen2DArray<FixedPointNumber<S, P, T, C>, N2, N3>,
+    ) -> Gen2DArray<FixedPointNumber<S, P, T, C>, N1, N3> {
         let self_abs: Vec<_> = self
             .contents
             .into_iter()
@@ -262,8 +263,8 @@ impl<T: BooleanType<C>, C, const S: usize, const P: usize, const N1: usize, cons
     }
     pub fn mul_opt_rhs<const N3: usize>(
         &self,
-        mut rhs: Gen2DArray<FixedPointNumber<S, P, T, C>, C, N2, N3>,
-    ) -> Gen2DArray<FixedPointNumber<S, P, T, C>, C, N1, N3> {
+        mut rhs: Gen2DArray<FixedPointNumber<S, P, T, C>, N2, N3>,
+    ) -> Gen2DArray<FixedPointNumber<S, P, T, C>, N1, N3> {
         let rhs_abs: Vec<_> = rhs
             .contents
             .into_iter()
@@ -315,14 +316,14 @@ impl<T: BooleanType<C>, C, const S: usize, const P: usize, const N1: usize, cons
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize, const N3: usize> Mul<&Gen2DArray<T, C, N2, N3>>
-    for &Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize, const N3: usize> Mul<&Gen2DArray<T, N2, N3>>
+    for &Gen2DArray<T, N1, N2>
 where
     for<'a> T: AddAssign<&'a T>,
     for<'a> &'a T: Mul<&'a T, Output = T>,
 {
-    type Output = Gen2DArray<T, C, N1, N3>;
-    fn mul(self, rhs: &Gen2DArray<T, C, N2, N3>) -> Self::Output {
+    type Output = Gen2DArray<T, N1, N3>;
+    fn mul(self, rhs: &Gen2DArray<T, N2, N3>) -> Self::Output {
         let mut lst: Vec<Option<T>> = (0..(N1 * N3)).map(|_| None).collect();
 
         for i in 0..N1 {
@@ -354,6 +355,63 @@ where
     }
 }
 
+impl<T: NumberType + Clone, const N1: usize, const N2: usize, const N3: usize>
+    MulAdd<&Gen2DArray<T, N2, N3>, &Gen2DArray<T, N1, N3>> for &Gen2DArray<T, N1, N2>
+where
+    for<'a> T: AddAssign<&'a T>,
+    for<'a> &'a T: Mul<&'a T, Output = T>,
+{
+    type Output = Gen2DArray<T, N1, N3>;
+
+    fn mul_add(self, rhs: &Gen2DArray<T, N2, N3>, b: &Gen2DArray<T, N1, N3>) -> Self::Output {
+        let mut b = b.clone();
+        let lst = b.contents.as_mut();
+
+        for i in 0..N1 {
+            for j in 0..N3 {
+                let val = lst.get_mut(i * N3 + j).unwrap();
+
+                for k in 0..N2 {
+                    let res: T = &self.contents[i * N2 + k] * &rhs.contents[k * N3 + j];
+                    *val += &res;
+                }
+            }
+        }
+        b
+    }
+
+    // fn mul_add(self, rhs: &Gen2DArray<T, N2, N3>) -> Self::Output {
+    //     let mut lst: Vec<Option<T>> = (0..(N1 * N3)).map(|_| None).collect();
+
+    //     for i in 0..N1 {
+    //         for j in 0..N3 {
+    //             let mut val = None;
+
+    //             for k in 0..N2 {
+    //                 let res: T = &self.contents[i * N2 + k] * &rhs.contents[k * N3 + j];
+    //                 match val.as_mut() {
+    //                     Some(v1) => {
+    //                         *v1 += &res;
+    //                     }
+    //                     None => {
+    //                         val = Some(res);
+    //                     }
+    //                 }
+    //             }
+
+    //             lst[i * N3 + j] = val;
+    //         }
+    //     }
+
+    //     Self::Output {
+    //         contents: lst.into_iter().collect::<Option<_>>().unwrap(),
+    //         context: Arc::clone(&self.context),
+    //         rows: PhantomData::default(),
+    //         cols: PhantomData::default(),
+    //     }
+    // }
+}
+
 impl<
         T: BooleanType<C>,
         C,
@@ -361,13 +419,13 @@ impl<
         const PRECISION: usize,
         const N1: usize,
         const N2: usize,
-    > Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, C, N1, N2>
+    > Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, N1, N2>
 {
     pub fn multiply_add_execute<const BITS_INT: usize, const N3: usize, T1>(
         &self,
-        multiply: &Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, C, N2, N3>,
-        add: &Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, C, N1, N3>,
-        execute: impl Fn(Gen2DArray<FixedPointNumber<BITS_INT, PRECISION, T, C>, C, N1, N3>) -> T1,
+        multiply: &Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, N2, N3>,
+        add: &Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, N1, N3>,
+        execute: impl Fn(Gen2DArray<FixedPointNumber<BITS_INT, PRECISION, T, C>, N1, N3>) -> T1,
     ) -> T1 {
         let mut self_abs = Vec::with_capacity(self.contents.len());
         let mut rhs_abs = Vec::with_capacity(multiply.contents.len());
@@ -409,11 +467,11 @@ impl<
     }
 }
 
-impl<T: Clone, C, const N1: usize, const N2: usize> Mul<&T> for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType + Clone, const N1: usize, const N2: usize> Mul<&T> for Gen2DArray<T, N1, N2>
 where
     for<'a> T: Mul<&'a T, Output = T>,
 {
-    type Output = Gen2DArray<T, C, N1, N2>;
+    type Output = Gen2DArray<T, N1, N2>;
     fn mul(mut self, rhs: &T) -> Self::Output {
         self.contents
             .iter_mut()
@@ -422,13 +480,13 @@ where
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> Add<&Gen2DArray<T, C, N1, N2>>
-    for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> Add<&Gen2DArray<T, N1, N2>>
+    for Gen2DArray<T, N1, N2>
 where
     for<'a> T: AddAssign<&'a T>,
 {
-    type Output = Gen2DArray<T, C, N1, N2>;
-    fn add(mut self, rhs: &Gen2DArray<T, C, N1, N2>) -> Self::Output {
+    type Output = Gen2DArray<T, N1, N2>;
+    fn add(mut self, rhs: &Gen2DArray<T, N1, N2>) -> Self::Output {
         self.contents
             .iter_mut()
             .zip(rhs.contents.iter())
@@ -436,12 +494,12 @@ where
         self
     }
 }
-impl<T, C, const N1: usize, const N2: usize> AddAssign<&Gen2DArray<T, C, N1, N2>>
-    for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> AddAssign<&Gen2DArray<T, N1, N2>>
+    for Gen2DArray<T, N1, N2>
 where
     for<'a> T: AddAssign<&'a T>,
 {
-    fn add_assign(&mut self, rhs: &Gen2DArray<T, C, N1, N2>) {
+    fn add_assign(&mut self, rhs: &Gen2DArray<T, N1, N2>) {
         self.contents
             .as_mut()
             .iter_mut()
@@ -450,11 +508,11 @@ where
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> Div<&T> for &Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> Div<&T> for &Gen2DArray<T, N1, N2>
 where
     for<'a> &'a T: Div<&'a T, Output = T>,
 {
-    type Output = Gen2DArray<T, C, N1, N2>;
+    type Output = Gen2DArray<T, N1, N2>;
     fn div(self, rhs: &T) -> Self::Output {
         let contents = self.contents.iter().map(|v1| v1 / rhs).collect();
         Self::Output {
@@ -466,7 +524,7 @@ where
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> DivAssign<&T> for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> DivAssign<&T> for Gen2DArray<T, N1, N2>
 where
     for<'a> &'a T: Div<&'a T, Output = T>,
 {
@@ -479,13 +537,13 @@ where
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> Sub<&Gen2DArray<T, C, N1, N2>>
-    for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> Sub<&Gen2DArray<T, N1, N2>>
+    for Gen2DArray<T, N1, N2>
 where
     for<'a> T: SubAssign<&'a T>,
 {
-    type Output = Gen2DArray<T, C, N1, N2>;
-    fn sub(mut self, rhs: &Gen2DArray<T, C, N1, N2>) -> Self::Output {
+    type Output = Gen2DArray<T, N1, N2>;
+    fn sub(mut self, rhs: &Gen2DArray<T, N1, N2>) -> Self::Output {
         self.contents
             .iter_mut()
             .zip(rhs.contents.iter())
@@ -494,12 +552,12 @@ where
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> SubAssign<&Gen2DArray<T, C, N1, N2>>
-    for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> SubAssign<&Gen2DArray<T, N1, N2>>
+    for Gen2DArray<T, N1, N2>
 where
     for<'a> T: SubAssign<&'a T>,
 {
-    fn sub_assign(&mut self, rhs: &Gen2DArray<T, C, N1, N2>) {
+    fn sub_assign(&mut self, rhs: &Gen2DArray<T, N1, N2>) {
         self.contents
             .iter_mut()
             .zip(rhs.contents.iter())
@@ -507,8 +565,11 @@ where
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
-    pub fn apply<T1>(&self, targetfn: impl Fn(&T) -> T1) -> Gen2DArray<T1, C, N1, N2> {
+impl<T: NumberType, const N1: usize, const N2: usize> Gen2DArray<T, N1, N2> {
+    pub fn apply<T1: NumberType<ContextType = T::ContextType>>(
+        &self,
+        targetfn: impl Fn(&T) -> T1,
+    ) -> Gen2DArray<T1, N1, N2> {
         Gen2DArray {
             contents: self.contents.iter().map(|v1| (targetfn)(v1)).collect(),
             context: Arc::clone(&self.context),
@@ -516,11 +577,11 @@ impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
             cols: PhantomData::default(),
         }
     }
-    pub fn apply_with_context<T1, C1>(
+    pub fn apply_with_context<T1: NumberType>(
         &self,
-        new_context: &Arc<C1>,
-        targetfn: impl Fn(&Arc<C1>, &T) -> T1,
-    ) -> Gen2DArray<T1, C1, N1, N2> {
+        new_context: &Arc<T1::ContextType>,
+        targetfn: impl Fn(&Arc<T1::ContextType>, &T) -> T1,
+    ) -> Gen2DArray<T1, N1, N2> {
         Gen2DArray {
             contents: self
                 .contents
@@ -537,11 +598,11 @@ impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
             (targetfn)(v1);
         });
     }
-    pub fn apply_zip<T1>(
+    pub fn apply_zip<T1: NumberType<ContextType = T::ContextType>>(
         &self,
         other: &Self,
         targetfn: impl Fn((&T, &T)) -> T1,
-    ) -> Gen2DArray<T1, C, N1, N2> {
+    ) -> Gen2DArray<T1, N1, N2> {
         Gen2DArray {
             contents: self
                 .contents
@@ -554,12 +615,12 @@ impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
             cols: PhantomData::default(),
         }
     }
-    pub fn apply_zip_2<T1>(
+    pub fn apply_zip_2<T1: NumberType<ContextType = T::ContextType>>(
         &self,
         other1: &Self,
         other2: &Self,
         targetfn: impl Fn((&T, &T, &T)) -> T1,
-    ) -> Gen2DArray<T1, C, N1, N2> {
+    ) -> Gen2DArray<T1, N1, N2> {
         Gen2DArray {
             contents: self
                 .contents
@@ -575,10 +636,13 @@ impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
     }
 }
 
-impl<T: DefaultWithContext<C> + Clone, C, const N1: usize, const N2: usize> DefaultWithContext<C>
-    for Gen2DArray<T, C, N1, N2>
+impl<
+        T: NumberType + DefaultWithContext<T::ContextType> + Clone,
+        const N1: usize,
+        const N2: usize,
+    > DefaultWithContext<T::ContextType> for Gen2DArray<T, N1, N2>
 {
-    fn default_ctx(ctx: &Arc<C>) -> Self {
+    fn default_ctx(ctx: &Arc<T::ContextType>) -> Self {
         let t = T::default_ctx(ctx);
         Gen2DArray {
             contents: (0..(N1 * N2)).map(|_| t.clone()).collect(),
@@ -589,7 +653,7 @@ impl<T: DefaultWithContext<C> + Clone, C, const N1: usize, const N2: usize> Defa
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
+impl<T: NumberType, const N1: usize, const N2: usize> Gen2DArray<T, N1, N2> {
     pub fn apply_two(&self, targetfn: impl Fn(&T) -> (T, T)) -> (Self, Self) {
         let (lst1, lst2): (Vec<_>, Vec<_>) = self.contents.iter().map(|v1| (targetfn)(v1)).unzip();
         (
@@ -613,12 +677,12 @@ impl<T, C, const N1: usize, const N2: usize> Gen2DArray<T, C, N1, N2> {
     }
 }
 
-impl<T, C, const N1: usize, const N2: usize> PartialEq<Gen2DArray<T, C, N1, N2>>
-    for Gen2DArray<T, C, N1, N2>
+impl<T: NumberType, const N1: usize, const N2: usize> PartialEq<Gen2DArray<T, N1, N2>>
+    for Gen2DArray<T, N1, N2>
 where
     for<'a> &'a T: PartialEq<&'a T>,
 {
-    fn eq(&self, other: &Gen2DArray<T, C, N1, N2>) -> bool {
+    fn eq(&self, other: &Gen2DArray<T, N1, N2>) -> bool {
         for i in 0..N1 {
             for j in 0..N2 {
                 if &self.contents[i * N2 + j] != &other.contents[i * N2 + j] {
@@ -630,13 +694,13 @@ where
     }
 }
 
-impl<T, C, T1, C1, const N1: usize, const N2: usize> FromWithContext<Gen2DArray<T, C, N1, N2>, C1>
-    for Gen2DArray<T1, C1, N1, N2>
+impl<T: NumberType, T1: NumberType, const N1: usize, const N2: usize>
+    FromWithContext<Gen2DArray<T, N1, N2>, T1::ContextType> for Gen2DArray<T1, N1, N2>
 where
     T: Clone,
-    T1: FromWithContext<T, C1>,
+    T1: FromWithContext<T, T1::ContextType>,
 {
-    fn from_ctx(t: Gen2DArray<T, C, N1, N2>, ctx: &Arc<C1>) -> Self {
+    fn from_ctx(t: Gen2DArray<T, N1, N2>, ctx: &Arc<T1::ContextType>) -> Self {
         Gen2DArray {
             contents: t
                 .contents
@@ -653,19 +717,20 @@ where
 #[cfg(not(feature = "tokio"))]
 mod multithreading {
     use crate::DefaultWithContext;
+    use crate::NumberType;
 
     use super::Gen2DArray;
     use std::{iter::Iterator, ops::AddAssign};
 
     impl<
             'a,
-            T: 'a + Clone + Sync + Send + DefaultWithContext<C>,
-            C: 'a + Sync + Send,
+            T: 'a + NumberType + Clone + Sync + Send + DefaultWithContext<T::ContextType>,
             const N1: usize,
             const N2: usize,
-        > Gen2DArray<T, C, N1, N2>
+        > Gen2DArray<T, N1, N2>
     where
         for<'b> T: AddAssign<&'b T>,
+        T::ContextType: 'a + Sync + Send,
     {
         pub fn fold_add<I: Iterator<Item = &'a Self>>(lst: I) -> Self {
             let v: Vec<_> = lst.collect();
@@ -680,6 +745,8 @@ mod multithreading {
 
 #[cfg(feature = "tokio")]
 mod multithreading {
+    use crate::NumberType;
+
     use super::Gen2DArray;
     use std::{iter::Iterator, ops::AddAssign};
 
@@ -689,15 +756,11 @@ mod multithreading {
         Val(T),
     }
 
-    impl<
-            'a,
-            T: 'a + Clone + Sync + Send,
-            C: 'a + Sync + Send,
-            const N1: usize,
-            const N2: usize,
-        > Gen2DArray<T, C, N1, N2>
+    impl<'a, T: 'a + NumberType + Clone + Sync + Send, const N1: usize, const N2: usize>
+        Gen2DArray<T, N1, N2>
     where
         for<'b> T: AddAssign<&'b T>,
+        T::ContextType: 'a + Sync + Send,
     {
         pub fn fold_add<I: Iterator<Item = &'a Self>>(lst: I) -> Self {
             use tokio::sync::Mutex;
@@ -749,10 +812,13 @@ mod strassen {
         sync::Arc,
     };
 
-    use crate::{DefaultWithContext, Gen2DArray};
+    use crate::{DefaultWithContext, Gen2DArray, NumberType};
 
-    impl<T: DefaultWithContext<C> + Clone + 'static, C, const N1: usize, const N2: usize>
-        Gen2DArray<T, C, N1, N2>
+    impl<
+            T: NumberType + DefaultWithContext<T::ContextType> + Clone + 'static,
+            const N1: usize,
+            const N2: usize,
+        > Gen2DArray<T, N1, N2>
     where
         for<'a> &'a T: Mul<&'a T, Output = T>,
         for<'a> T: Add<&'a T, Output = T>,
@@ -760,8 +826,8 @@ mod strassen {
     {
         pub fn mul_strassen<const N3: usize>(
             self,
-            rhs: &Gen2DArray<T, C, N2, N3>,
-        ) -> Gen2DArray<T, C, N1, N3> {
+            rhs: &Gen2DArray<T, N2, N3>,
+        ) -> Gen2DArray<T, N1, N3> {
             let max_dim = usize::max(N1.max(N2), N3);
             let log = (max_dim as f32).log2();
             let new_size = match log != log.ceil() {
@@ -786,7 +852,7 @@ mod strassen {
             let mut res: Vec<_> = (0..num_elements).map(|_| None).collect();
             let mut stack: Vec<_> = (0..((num_elements / 4) * 12)).map(|_| None).collect();
 
-            strassen_matrix_multiplication::<T, C>(
+            strassen_matrix_multiplication::<T, T::ContextType>(
                 0,
                 &self.context,
                 &a_lst,

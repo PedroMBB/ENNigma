@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use neuralnetworks::{ModelTrainer, TrainCommand, TrainMetric, TrainStatus};
-use numbers::{BooleanType, FixedPointNumber};
+use numbers::{NumberType, SwitchContext};
 
 pub struct DecryptionTrainer<C> {
     next_trainer: Box<dyn ModelTrainer<f32>>,
@@ -17,10 +17,12 @@ impl<C> DecryptionTrainer<C> {
     }
 }
 
-impl<T: BooleanType<C>, C, const SIZE: usize, const PRECISION: usize>
-    ModelTrainer<FixedPointNumber<SIZE, PRECISION, T, C>> for DecryptionTrainer<C>
+impl<T: NumberType + Clone> ModelTrainer<T> for DecryptionTrainer<T::ContextType>
+where
+    T: SwitchContext<T::ContextType>,
+    T: Into<f32>,
 {
-    fn send_status(&self, status: &TrainStatus<FixedPointNumber<SIZE, PRECISION, T, C>>) {
+    fn send_status(&self, status: &TrainStatus<T>) {
         self.next_trainer.send_status(&match status {
             TrainStatus::TrainStart { at } => TrainStatus::TrainStart { at: at.clone() },
             TrainStatus::TrainEnd { start, end } => TrainStatus::TrainEnd {

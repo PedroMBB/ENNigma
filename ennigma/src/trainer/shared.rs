@@ -7,6 +7,7 @@ use std::{
 use crossterm::{cursor, terminal, ExecutableCommand};
 use crypto::EncryptedContext;
 use neuralnetworks::{ModelTrainer, TrainCommand, TrainStatus};
+use numbers::SwitchContext;
 
 use crate::EncryptedFixedPrecision;
 
@@ -104,7 +105,7 @@ impl<const SIZE: usize, const PRECISION: usize>
                     metrics
                         .iter()
                         .map(|m| {
-                            let v: f32 = m.value.clone().switch_context(&self.context).into();
+                            let v: f32 = m.value.switch_context(&self.context).into();
                             format!("{}:{}", m.name, v)
                         })
                         .collect::<Vec<_>>()
@@ -114,7 +115,7 @@ impl<const SIZE: usize, const PRECISION: usize>
                         Some(v) => v
                             .iter()
                             .map(|m| {
-                                let v: f32 = m.value.clone().switch_context(&self.context).into();
+                                let v: f32 = m.value.switch_context(&self.context).into();
                                 format!("{}:{}", m.name, v)
                             })
                             .collect::<Vec<_>>()

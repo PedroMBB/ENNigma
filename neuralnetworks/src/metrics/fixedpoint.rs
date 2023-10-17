@@ -20,15 +20,15 @@ impl<
         C,
         const CALC_SIZE: usize,
         const CALC_PRECISION: usize,
-    > Metric<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1>
+    > Metric<FixedPointNumber<SIZE, PRECISION, T, C>, 1>
     for FixedPrecisionAccuracyMetric<CALC_SIZE, CALC_PRECISION>
 {
     fn calc_metric(
         &self,
         ctx: &Arc<C>,
         lst: &[(
-            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1>,
-            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1>,
+            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, 1>,
+            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, 1>,
         )],
     ) -> TrainMetric<FixedPointNumber<SIZE, PRECISION, T, C>> {
         let point_five: FixedPointNumber<SIZE, PRECISION, T, C> =
@@ -45,7 +45,7 @@ impl<
         let correct_count: FixedPointNumber<CALC_SIZE, CALC_PRECISION, T, C> = lst
             .into_iter()
             .map(|(exp, reac)| {
-                let mut diff: Gen1DArray<_, C, 1> = (*exp).clone();
+                let mut diff: Gen1DArray<_, 1> = (*exp).clone();
                 diff -= *reac;
 
                 let res: Vec<&FixedPointNumber<SIZE, PRECISION, T, C>> = (&diff).into();
@@ -79,15 +79,15 @@ impl<
         C,
         const CALC_SIZE: usize,
         const CALC_PRECISION: usize,
-    > Metric<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1>
+    > Metric<FixedPointNumber<SIZE, PRECISION, T, C>, 1>
     for FixedPrecisionMeanSquareErrorMetric<CALC_SIZE, CALC_PRECISION>
 {
     fn calc_metric(
         &self,
         ctx: &Arc<C>,
         lst: &[(
-            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1>,
-            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1>,
+            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, 1>,
+            &Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, 1>,
         )],
     ) -> TrainMetric<FixedPointNumber<SIZE, PRECISION, T, C>> {
         let total_size: FixedPointNumber<22, 0, T, C> =
@@ -96,7 +96,7 @@ impl<
         let r = lst
             .into_iter()
             .map(|(exp, reac)| {
-                let mut res: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, 1> =
+                let mut res: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, 1> =
                     (*exp).clone();
                 res -= *reac;
 
@@ -127,10 +127,10 @@ mod test {
         type Number = BoolFixedPointNumber<16, 8>;
 
         let ctx = Arc::new(());
-        let acc: Box<dyn Metric<Number, (), 1>> = Box::new(AccuracyMetric {});
+        let acc: Box<dyn Metric<Number, 1>> = Box::new(AccuracyMetric {});
 
         let assert_acc = |input: &[f32], output: &[f32], accuracy: f32| {
-            let lst: Vec<(Gen1DArray<Number, (), 1>, Gen1DArray<Number, (), 1>)> = input
+            let lst: Vec<(Gen1DArray<Number, 1>, Gen1DArray<Number, 1>)> = input
                 .iter()
                 .zip(output.iter())
                 .map(|(i, o)| {
@@ -138,12 +138,12 @@ mod test {
                     let v2 = FromWithContext::from_ctx(*o, &Arc::new(()));
 
                     (
-                        Gen1DArray::<Number, (), 1>::from_array([[v1]], &ctx),
-                        Gen1DArray::<Number, (), 1>::from_array([[v2]], &ctx),
+                        Gen1DArray::<Number, 1>::from_array([[v1]], &ctx),
+                        Gen1DArray::<Number, 1>::from_array([[v2]], &ctx),
                     )
                 })
                 .collect();
-            let lst1: Vec<(&Gen1DArray<Number, (), 1>, &Gen1DArray<Number, (), 1>)> =
+            let lst1: Vec<(&Gen1DArray<Number, 1>, &Gen1DArray<Number, 1>)> =
                 lst.iter().map(|v| (&v.0, &v.1)).collect();
 
             let acc: TrainMetric<Number> = acc.calc_metric(&ctx, lst1.as_slice());

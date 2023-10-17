@@ -2,7 +2,7 @@ use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
 use crate::{
     iterator_to_sized_arc, AddContext, BooleanType, DefaultWithContext, FixedPointNumber,
-    FixedPointNumberNoContext, FromWithContext,
+    FixedPointNumberNoContext, FromWithContext, Mux, SwitchContext,
 };
 
 impl<
@@ -25,14 +25,15 @@ impl<
 }
 
 // Switch Context
-impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C>
-    FixedPointNumber<SIZE, PRECISION, T, C>
+impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C> SwitchContext<C>
+    for FixedPointNumber<SIZE, PRECISION, T, C>
 {
-    pub fn switch_context(mut self, context: &Arc<C>) -> FixedPointNumber<SIZE, PRECISION, T, C> {
-        let bits = Arc::make_mut(&mut self.bits);
+    fn switch_context(&self, context: &Arc<C>) -> FixedPointNumber<SIZE, PRECISION, T, C> {
+        let mut new_v = self.clone();
+        let bits = Arc::make_mut(&mut new_v.bits);
         bits.iter_mut().for_each(|f| *f = f.switch_context(context));
-        self.context = Arc::clone(context);
-        self
+        new_v.context = Arc::clone(context);
+        new_v
     }
 }
 
@@ -155,21 +156,38 @@ impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C>
 }
 
 // Others
+
+impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C> Mux
+    for FixedPointNumber<SIZE, PRECISION, T, C>
+{
+    type Output = FixedPointNumber<SIZE, PRECISION, T, C>;
+    fn mux(&self, yes: &Self::Output, no: &Self::Output) -> Self::Output {
+        let mut res = yes.clone();
+        let bit = self.bits[PRECISION].clone();
+        let b = Arc::make_mut(&mut res.bits);
+
+        b.iter_mut()
+            .zip(no.bits.iter())
+            .for_each(|(y, n)| *y = bit.mux(y, n));
+
+        res
+    }
+}
 impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C>
     FixedPointNumber<SIZE, PRECISION, T, C>
 {
     pub fn msb(&self) -> &T {
         self.bits.last().expect("Should have at least one bit")
     }
-    pub fn mux(condition: &T, mut yes: Self, no: Self) -> Self {
-        let b = Arc::make_mut(&mut yes.bits);
+    // pub fn mux(condition: &T, mut yes: Self, no: Self) -> Self {
+    //     let b = Arc::make_mut(&mut yes.bits);
 
-        b.iter_mut()
-            .zip(no.bits.iter())
-            .for_each(|(yes, no)| *yes = condition.mux(yes, no));
+    //     b.iter_mut()
+    //         .zip(no.bits.iter())
+    //         .for_each(|(yes, no)| *yes = condition.mux(yes, no));
 
-        yes
-    }
+    //     yes
+    // }
     pub fn mux_number(mut self, yes: &Self, no: &Self) -> Self {
         let bit = self.bits[PRECISION].clone();
         let b = Arc::make_mut(&mut self.bits);

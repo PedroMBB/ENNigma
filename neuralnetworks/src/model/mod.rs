@@ -6,7 +6,7 @@ use self::types::CurrentLayer;
 
 use super::metrics::Metric;
 use chrono::Utc;
-use numbers::{BoolFixedPointNumber, FromWithContext, Gen1DArray};
+use numbers::{BoolFixedPointNumber, FromWithContext, Gen1DArray, NumberType};
 use rand::seq::SliceRandom;
 use serde::Serialize;
 use std::{
@@ -24,26 +24,26 @@ pub type BoolModel<
     const PRECISION: usize,
     const INPUT: usize,
     const OUTPUT: usize,
-> = Model<BoolFixedPointNumber<SIZE, PRECISION>, (), INPUT, OUTPUT>;
+> = Model<BoolFixedPointNumber<SIZE, PRECISION>, INPUT, OUTPUT>;
 
-pub struct Model<T: 'static + Clone, C, const INPUT_N: usize, const OUTPUT_N: usize> {
-    first_layer: RwLock<Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>>,
-    context: Arc<C>,
+pub struct Model<T: 'static + NumberType + Clone, const INPUT_N: usize, const OUTPUT_N: usize> {
+    first_layer: RwLock<Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>>,
+    context: Arc<T::ContextType>,
 }
 
 impl<
-        T: 'static + Clone + Sync + Send + Serialize,
-        C: 'static + Sync + Send,
+        T: 'static + Clone + Sync + Send + Serialize + NumberType,
         const INPUT_N: usize,
         const OUTPUT_N: usize,
-    > Model<T, C, INPUT_N, OUTPUT_N>
+    > Model<T, INPUT_N, OUTPUT_N>
 where
-    T: FromWithContext<f32, C>,
-    for<'a> T: Add<&'a T, Output = T>,
-    for<'a> T: Mul<&'a T, Output = T>,
-    for<'a> T: Div<&'a T, Output = T>,
+    T::ContextType: Sync + Send,
+    T: FromWithContext<f32, T::ContextType>,
+    // for<'a> T: Add<&'a T, Output = T>,
+    // for<'a> T: Mul<&'a T, Output = T>,
+    // for<'a> T: Div<&'a T, Output = T>,
 {
-    pub fn execute(&self, input: &Gen1DArray<T, C, INPUT_N>) -> Gen1DArray<T, C, OUTPUT_N> {
+    pub fn execute(&self, input: &Gen1DArray<T, INPUT_N>) -> Gen1DArray<T, OUTPUT_N> {
         self.first_layer
             .read()
             .expect("Should be able to read lock mutex")
@@ -51,8 +51,8 @@ where
     }
     pub fn execute_multiple(
         &self,
-        input: &[&Gen1DArray<T, C, INPUT_N>],
-    ) -> Vec<Gen1DArray<T, C, OUTPUT_N>> {
+        input: &[&Gen1DArray<T, INPUT_N>],
+    ) -> Vec<Gen1DArray<T, OUTPUT_N>> {
         #[cfg(feature = "profiling")]
         println!("Profiling: ON");
 
@@ -107,17 +107,16 @@ where
     }
     pub fn fit_single(
         &self,
-        input: &Gen1DArray<T, C, INPUT_N>,
-        expected: &Gen1DArray<T, C, OUTPUT_N>,
+        input: &Gen1DArray<T, INPUT_N>,
+        expected: &Gen1DArray<T, OUTPUT_N>,
         learning_rate: &isize,
-    ) -> Gen1DArray<T, C, OUTPUT_N> {
+    ) -> Gen1DArray<T, OUTPUT_N> {
         let data = self
             .first_layer
             .read()
             .expect("Should be able to read lock mutex")
             .fit(&self.context, input, expected, learning_rate);
-        let output: Gen1DArray<T, C, OUTPUT_N> =
-            FromWithContext::from_ctx(data.output, &self.context);
+        let output: Gen1DArray<T, OUTPUT_N> = FromWithContext::from_ctx(data.output, &self.context);
         output
     }
     pub fn fit<'a, Trainer: ModelTrainer<T>>(
@@ -125,12 +124,9 @@ where
         epochs: usize,
         chunk_size: usize,
         mut learning_rate: isize,
-        train: (
-            &'a [Gen1DArray<T, C, INPUT_N>],
-            &'a [Gen1DArray<T, C, OUTPUT_N>],
-        ),
-        test: Option<&[(Gen1DArray<T, C, INPUT_N>, Gen1DArray<T, C, OUTPUT_N>)]>,
-        metrics: &[Box<dyn Metric<T, C, OUTPUT_N>>],
+        train: (&'a [Gen1DArray<T, INPUT_N>], &'a [Gen1DArray<T, OUTPUT_N>]),
+        test: Option<&[(Gen1DArray<T, INPUT_N>, Gen1DArray<T, OUTPUT_N>)]>,
+        metrics: &[Box<dyn Metric<T, OUTPUT_N>>],
         trainer: &Trainer,
         mut rng: &mut dyn rand::RngCore,
     ) -> Option<Vec<TrainMetric<T>>> {
@@ -186,7 +182,7 @@ where
                 let val: f32 = (test_data.len() as f32 / num_cores as f32).ceil();
                 let v: Vec<_> = test_data.chunks(val as usize).collect();
 
-                let test_results: Vec<FitResult<T, C, OUTPUT_N>> = {
+                let test_results: Vec<FitResult<T, OUTPUT_N>> = {
                     let layer = self
                         .first_layer
                         .read()
@@ -211,7 +207,7 @@ where
         // Command handling
         let command_fn = |stop: &mut bool,
                           learning_rate_ref: &mut isize,
-                          results: &Vec<FitResult<T, C, OUTPUT_N>>| {
+                          results: &Vec<FitResult<T, OUTPUT_N>>| {
             let mut leave = true;
             let since = Utc::now().naive_utc();
             loop {
@@ -281,7 +277,7 @@ where
                 .try_into()
                 .expect("Should give a positive result");
 
-            let mut results: Vec<FitResult<T, C, OUTPUT_N>> = Vec::with_capacity(training.len());
+            let mut results: Vec<FitResult<T, OUTPUT_N>> = Vec::with_capacity(training.len());
 
             for (chunk_n, chunk) in training.as_slice().chunks(chunk_size).enumerate() {
                 trace!("[Model::fit] Starting chunk {} of {}", chunk_n, num_chunks);
@@ -299,7 +295,7 @@ where
                 // let lr: T = &learning_rate / &size;
                 let lr = learning_rate.clone();
 
-                let mut local_results: Vec<FitResult<T, C, OUTPUT_N>> = {
+                let mut local_results: Vec<FitResult<T, OUTPUT_N>> = {
                     let layer = self
                         .first_layer
                         .read()
@@ -393,11 +389,12 @@ where
 }
 
 impl<
-        T: 'static + Clone + Sync + Send + Serialize,
-        C: 'static + Sync + Send,
+        T: 'static + NumberType + Clone + Sync + Send + Serialize,
         const INPUT_N: usize,
         const OUTPUT_N: usize,
-    > SerializableModel for Model<T, C, INPUT_N, OUTPUT_N>
+    > SerializableModel for Model<T, INPUT_N, OUTPUT_N>
+where
+    T::ContextType: Sync + Send + 'static,
 {
     fn get_weights(&self) -> ModelWeights {
         let mut weights = ModelWeights::default();
@@ -420,9 +417,9 @@ impl<
     }
 }
 
-struct FitResult<T, C, const S: usize> {
-    expected: Gen1DArray<T, C, S>,
-    received: Gen1DArray<T, C, S>,
+struct FitResult<T: NumberType, const S: usize> {
+    expected: Gen1DArray<T, S>,
+    received: Gen1DArray<T, S>,
 }
 
 // impl<T: Clone, C, const S: usize> Clone for FitResult<T, C, S> {
@@ -441,7 +438,7 @@ fn execute_multiple<
     const INPUT_N: usize,
     const OUTPUT_N: usize,
 >(
-    layer: &Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>,
+    layer: &Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>,
     ctx: &Arc<C>,
     chunk: Vec<(&usize, &[&Gen1DArray<T, C, INPUT_N>])>,
 ) -> Vec<Gen1DArray<T, C, OUTPUT_N>> {
@@ -459,16 +456,18 @@ fn execute_multiple<
 
 #[cfg(feature = "rayon")]
 fn execute_chunk<
-    T: 'static + Clone + Sync + Send,
-    C: 'static + Sync + Send,
+    T: 'static + Clone + Sync + Send + NumberType,
     const INPUT_N: usize,
     const OUTPUT_N: usize,
 >(
-    layer: &Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>,
-    ctx: &Arc<C>,
-    chunk: Vec<&[(&Gen1DArray<T, C, INPUT_N>, &Gen1DArray<T, C, OUTPUT_N>)]>,
+    layer: &Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>,
+    ctx: &Arc<T::ContextType>,
+    chunk: Vec<&[(&Gen1DArray<T, INPUT_N>, &Gen1DArray<T, OUTPUT_N>)]>,
     learning_rate: &isize,
-) -> Vec<FitResult<T, C, OUTPUT_N>> {
+) -> Vec<FitResult<T, OUTPUT_N>>
+where
+    T::ContextType: 'static + Sync + Send,
+{
     use rayon::prelude::{IntoParallelIterator, ParallelIterator};
     chunk
         .into_par_iter()
@@ -490,15 +489,17 @@ fn execute_chunk<
 
 #[cfg(feature = "rayon")]
 fn execute_test_data<
-    T: 'static + Clone + Sync + Send,
-    C: 'static + Sync + Send,
+    T: 'static + Clone + Sync + Send + NumberType,
     const INPUT_N: usize,
     const OUTPUT_N: usize,
 >(
-    layer: &Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>,
-    ctx: &Arc<C>,
-    chunk: Vec<&[(Gen1DArray<T, C, INPUT_N>, Gen1DArray<T, C, OUTPUT_N>)]>,
-) -> Vec<FitResult<T, C, OUTPUT_N>> {
+    layer: &Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>,
+    ctx: &Arc<T::ContextType>,
+    chunk: Vec<&[(Gen1DArray<T, INPUT_N>, Gen1DArray<T, OUTPUT_N>)]>,
+) -> Vec<FitResult<T, OUTPUT_N>>
+where
+    T::ContextType: 'static + Sync + Send,
+{
     use rayon::prelude::{IntoParallelIterator, ParallelIterator};
     chunk
         .into_par_iter()
@@ -520,15 +521,17 @@ fn execute_test_data<
 
 #[cfg(feature = "tokio")]
 fn execute_multiple<
-    T: 'static + Clone + Sync + Send,
-    C: 'static + Sync + Send,
+    T: 'static + NumberType + Clone + Sync + Send,
     const INPUT_N: usize,
     const OUTPUT_N: usize,
 >(
-    layer: &Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>,
-    ctx: &Arc<C>,
-    chunk: Vec<(&usize, &[&Gen1DArray<T, C, INPUT_N>])>,
-) -> Vec<Gen1DArray<T, C, OUTPUT_N>> {
+    layer: &Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>,
+    ctx: &Arc<T::ContextType>,
+    chunk: Vec<(&usize, &[&Gen1DArray<T, INPUT_N>])>,
+) -> Vec<Gen1DArray<T, OUTPUT_N>>
+where
+    T::ContextType: 'static + Sync + Send,
+{
     use tokio::sync::Mutex;
 
     let lst: Vec<_> = chunk.iter().map(|_| None).collect();
@@ -557,16 +560,18 @@ fn execute_multiple<
 
 #[cfg(feature = "tokio")]
 fn execute_chunk<
-    T: 'static + Clone + Sync + Send,
-    C: 'static + Sync + Send,
+    T: 'static + NumberType + Clone + Sync + Send,
     const INPUT_N: usize,
     const OUTPUT_N: usize,
 >(
-    layer: &Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>,
-    ctx: &Arc<C>,
-    chunk: Vec<&[(&Gen1DArray<T, C, INPUT_N>, &Gen1DArray<T, C, OUTPUT_N>)]>,
+    layer: &Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>,
+    ctx: &Arc<T::ContextType>,
+    chunk: Vec<&[(&Gen1DArray<T, INPUT_N>, &Gen1DArray<T, OUTPUT_N>)]>,
     learning_rate: &isize,
-) -> Vec<FitResult<T, C, OUTPUT_N>> {
+) -> Vec<FitResult<T, OUTPUT_N>>
+where
+    T::ContextType: 'static + Sync + Send,
+{
     use tokio::sync::Mutex;
 
     let ret_lst = Mutex::new(vec![]);
@@ -593,15 +598,17 @@ fn execute_chunk<
 
 #[cfg(feature = "tokio")]
 fn execute_test_data<
-    T: 'static + Clone + Sync + Send,
-    C: 'static + Sync + Send,
+    T: 'static + NumberType + Clone + Sync + Send,
     const INPUT_N: usize,
     const OUTPUT_N: usize,
 >(
-    layer: &Arc<dyn CurrentLayer<T, C, INPUT_N, OUTPUT_N>>,
-    ctx: &Arc<C>,
-    chunk: Vec<&[(Gen1DArray<T, C, INPUT_N>, Gen1DArray<T, C, OUTPUT_N>)]>,
-) -> Vec<FitResult<T, C, OUTPUT_N>> {
+    layer: &Arc<dyn CurrentLayer<T, INPUT_N, OUTPUT_N>>,
+    ctx: &Arc<T::ContextType>,
+    chunk: Vec<&[(Gen1DArray<T, INPUT_N>, Gen1DArray<T, OUTPUT_N>)]>,
+) -> Vec<FitResult<T, OUTPUT_N>>
+where
+    T::ContextType: 'static + Sync + Send,
+{
     use tokio::sync::Mutex;
 
     let ret_lst = Mutex::new(vec![]);

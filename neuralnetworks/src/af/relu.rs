@@ -6,7 +6,7 @@ use std::sync::Arc;
 pub struct ReLUAF {}
 
 impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C, const N: usize>
-    ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, C, N> for ReLUAF
+    ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, N> for ReLUAF
 where
     FixedPointNumber<SIZE, PRECISION, T, C>: FromWithContext<f32, C>,
 {
@@ -40,10 +40,10 @@ where
     fn activate_multiple(
         &self,
         ctx: &Arc<C>,
-        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
-    ) -> Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N> {
+        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
+    ) -> Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N> {
         lst.apply(|v| {
-            <ReLUAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>>::activate(
+            <ReLUAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, N>>::activate(
                 self,
                 ctx,
                 v.clone(),
@@ -53,12 +53,12 @@ where
     fn activate_and_derivative_multiple(
         &self,
         ctx: &Arc<C>,
-        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
+        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
     ) -> (
-        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
-        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
+        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
+        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
     ) {
-        lst.apply_two(|v| <ReLUAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>>::activate_and_derivative(self, ctx, v.clone()))
+        lst.apply_two(|v| <ReLUAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, N>>::activate_and_derivative(self, ctx, v.clone()))
     }
 }
 
@@ -66,7 +66,7 @@ where
 pub struct ReLUTruncAF {}
 
 impl<const SIZE: usize, const PRECISION: usize, T: BooleanType<C>, C, const N: usize>
-    ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, C, N> for ReLUTruncAF
+    ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, N> for ReLUTruncAF
 where
     FixedPointNumber<SIZE, PRECISION, T, C>: FromWithContext<f32, C>,
 {
@@ -107,10 +107,10 @@ where
     fn activate_multiple(
         &self,
         ctx: &Arc<C>,
-        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
-    ) -> Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N> {
+        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
+    ) -> Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N> {
         lst.apply(|v| {
-            <ReLUTruncAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>>::activate(
+            <ReLUTruncAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, N>>::activate(
                 self,
                 ctx,
                 v.clone(),
@@ -120,11 +120,11 @@ where
     fn activate_and_derivative_multiple(
         &self,
         ctx: &Arc<C>,
-        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
+        lst: Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
     ) -> (
-        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
-        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>,
+        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
+        Gen1DArray<FixedPointNumber<SIZE, PRECISION, T, C>, N>,
     ) {
-        lst.apply_two(|v| <ReLUTruncAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, C, N>>::activate_and_derivative(self, ctx, v.clone()))
+        lst.apply_two(|v| <ReLUTruncAF as ActivationFn<FixedPointNumber<SIZE, PRECISION, T, C>, N>>::activate_and_derivative(self, ctx, v.clone()))
     }
 }

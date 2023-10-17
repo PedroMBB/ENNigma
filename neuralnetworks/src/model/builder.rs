@@ -1,5 +1,7 @@
 use std::sync::{Arc, RwLock};
 
+use numbers::NumberType;
+
 use crate::layers::Layer;
 
 use super::{
@@ -7,15 +9,17 @@ use super::{
     Model,
 };
 
-pub struct ModelBuilder<T: 'static + Clone, C: 'static, const N1: usize, const N2: usize> {
+pub struct ModelBuilder<T: 'static + Clone + NumberType, const N1: usize, const N2: usize> {
     current_i: usize,
-    current_layer: Arc<dyn CurrentLayer<T, C, N1, N2>>,
+    current_layer: Arc<dyn CurrentLayer<T, N1, N2>>,
 }
 
-impl<T: 'static + Clone + Sync + Send, C: Sync + Send, const N2: usize, const N3: usize>
-    ModelBuilder<T, C, N2, N3>
+impl<T: 'static + NumberType + Clone + Sync + Send, const N2: usize, const N3: usize>
+    ModelBuilder<T, N2, N3>
+where
+    T::ContextType: Sync + Send,
 {
-    pub fn new(mut layer: impl Layer<T, C, N2, N3> + 'static) -> ModelBuilder<T, C, N2, N3> {
+    pub fn new(mut layer: impl Layer<T, N2, N3> + 'static) -> ModelBuilder<T, N2, N3> {
         layer.update_name("layer_1");
 
         ModelBuilder {
@@ -29,8 +33,8 @@ impl<T: 'static + Clone + Sync + Send, C: Sync + Send, const N2: usize, const N3
 
     pub fn add_layer<const N1: usize>(
         self,
-        mut layer: impl Layer<T, C, N1, N2> + 'static,
-    ) -> ModelBuilder<T, C, N1, N3> {
+        mut layer: impl Layer<T, N1, N2> + 'static,
+    ) -> ModelBuilder<T, N1, N3> {
         layer.update_name(&format!("layer_{}", self.current_i));
 
         ModelBuilder {
@@ -42,7 +46,7 @@ impl<T: 'static + Clone + Sync + Send, C: Sync + Send, const N2: usize, const N3
         }
     }
 
-    pub fn build(self, ctx: &Arc<C>) -> Model<T, C, N2, N3> {
+    pub fn build(self, ctx: &Arc<T::ContextType>) -> Model<T, N2, N3> {
         Model {
             first_layer: RwLock::new(self.current_layer),
             context: Arc::clone(ctx),

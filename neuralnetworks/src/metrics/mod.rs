@@ -1,37 +1,37 @@
-use numbers::Gen1DArray;
+use numbers::{Gen1DArray, NumberType};
 use std::{ops::SubAssign, sync::Arc};
 
 mod fixedpoint;
 pub use fixedpoint::*;
 
-pub trait Metric<T, C, const N: usize>: Sync + Send {
+pub trait Metric<T: NumberType, const N: usize>: Sync + Send {
     fn calc_metric(
         &self,
-        ctx: &Arc<C>,
-        lst: &[(&Gen1DArray<T, C, N>, &Gen1DArray<T, C, N>)],
+        ctx: &Arc<T::ContextType>,
+        lst: &[(&Gen1DArray<T, N>, &Gen1DArray<T, N>)],
     ) -> TrainMetric<T>;
 }
 
-pub trait LossFunction<T, C, const SIZE: usize>: Sync + Send {
+pub trait LossFunction<T: NumberType, const SIZE: usize>: Sync + Send {
     fn cost_derivative(
         &self,
-        received: Gen1DArray<T, C, SIZE>,
-        expected: &Gen1DArray<T, C, SIZE>,
-    ) -> Gen1DArray<T, C, SIZE>;
+        received: Gen1DArray<T, SIZE>,
+        expected: &Gen1DArray<T, SIZE>,
+    ) -> Gen1DArray<T, SIZE>;
 }
 
 #[derive(Clone, Copy)]
 pub struct QuadLossFunction {}
 
-impl<T, C, const SIZE: usize> LossFunction<T, C, SIZE> for QuadLossFunction
+impl<T: NumberType, const SIZE: usize> LossFunction<T, SIZE> for QuadLossFunction
 where
     for<'a> T: SubAssign<&'a T>,
 {
     fn cost_derivative(
         &self,
-        mut received: Gen1DArray<T, C, SIZE>,
-        expected: &Gen1DArray<T, C, SIZE>,
-    ) -> Gen1DArray<T, C, SIZE> {
+        mut received: Gen1DArray<T, SIZE>,
+        expected: &Gen1DArray<T, SIZE>,
+    ) -> Gen1DArray<T, SIZE> {
         received -= expected;
         received
     }
@@ -46,7 +46,7 @@ mod metrics {
         sync::Arc,
     };
 
-    use numbers::{Abs, DefaultWithContext, FromWithContext, Gen1DArray, IsGreater};
+    use numbers::{Abs, DefaultWithContext, FromWithContext, Gen1DArray, IsGreater, NumberType};
 
     use crate::TrainMetric;
 
@@ -54,32 +54,31 @@ mod metrics {
 
     #[derive(Default)]
     pub struct MeanSquareErrorMetric {}
-    impl<T, C> Metric<T, C, 1> for MeanSquareErrorMetric
+    impl<T: NumberType> Metric<T, 1> for MeanSquareErrorMetric
     where
         T: Clone,
-        T: FromWithContext<f32, C>,
-        T: DefaultWithContext<C>,
+        T: FromWithContext<f32, T::ContextType>,
+        T: DefaultWithContext<T::ContextType>,
         for<'a> T: SubAssign<&'a T>,
         for<'a> T: Add<&'a T, Output = T>,
-        for<'a> &'a T: Div<&'a T, Output = T>,
         for<'a> &'a T: Mul<&'a T, Output = T>,
     {
         fn calc_metric(
             &self,
-            ctx: &Arc<C>,
-            lst: &[(&Gen1DArray<T, C, 1>, &Gen1DArray<T, C, 1>)],
+            ctx: &Arc<T::ContextType>,
+            lst: &[(&Gen1DArray<T, 1>, &Gen1DArray<T, 1>)],
         ) -> TrainMetric<T> {
             let first_size: f32 = (lst.len() as u16).try_into().expect("Should convert");
-            let first_size: T = FromWithContext::from_ctx(first_size, &ctx);
+            let first_size: T = FromWithContext::from_ctx(1.0_f32 / first_size, &ctx);
 
             let r = lst
                 .into_iter()
                 .map(|(exp, reac)| {
-                    let mut res: Gen1DArray<T, C, 1> = (*exp).clone();
+                    let mut res: Gen1DArray<T, 1> = (*exp).clone();
                     res -= *reac;
 
                     let lst: Vec<&T> = (&res).into();
-                    &(*lst.get(0).unwrap() * *lst.get(0).unwrap()) / &first_size
+                    &(*lst.get(0).unwrap() * *lst.get(0).unwrap()) * &first_size
                 })
                 .fold(T::default_ctx(ctx), |a, b| a + &b);
 
@@ -90,27 +89,27 @@ mod metrics {
     #[derive(Default)]
     pub struct AccuracyMetric {}
 
-    impl<T: Clone, C> Metric<T, C, 1> for AccuracyMetric
+    impl<T: Clone + NumberType> Metric<T, 1> for AccuracyMetric
     where
-        T: FromWithContext<f32, C> + IsGreater,
+        T: FromWithContext<f32, T::ContextType> + IsGreater,
         for<'a> T: Add<&'a T, Output = T>,
         for<'a> T: SubAssign<&'a T>,
-        for<'a> &'a T: Div<&'a T, Output = T>,
         for<'a> T: Abs<Output = T>,
+        for<'a> &'a T: Mul<&'a T, Output = T>,
     {
         fn calc_metric(
             &self,
-            ctx: &Arc<C>,
-            lst: &[(&Gen1DArray<T, C, 1>, &Gen1DArray<T, C, 1>)],
+            ctx: &Arc<T::ContextType>,
+            lst: &[(&Gen1DArray<T, 1>, &Gen1DArray<T, 1>)],
         ) -> TrainMetric<T> {
             let zero: T = FromWithContext::from_ctx(0.0, ctx);
             let point_five: T = FromWithContext::from_ctx(0.5, ctx);
-            let total_size: T = FromWithContext::from_ctx(lst.len() as f32, ctx);
+            let total_size: T = FromWithContext::from_ctx(1.0 / (lst.len() as f32), ctx);
 
             let correct_count: T = lst
                 .into_iter()
                 .map(|(exp, reac)| {
-                    let mut diff: Gen1DArray<T, C, 1> = (**exp).clone();
+                    let mut diff: Gen1DArray<T, 1> = (**exp).clone();
                     diff -= *reac;
 
                     let res: Vec<&T> = (&diff).into();
@@ -121,7 +120,7 @@ mod metrics {
                 })
                 .fold::<T, _>(zero, |a: T, b: T| a + &b);
 
-            let res: T = &correct_count / &total_size;
+            let res: T = &correct_count * &total_size;
 
             TrainMetric::new("Accuracy", res)
         }
@@ -160,20 +159,20 @@ mod test {
     #[test]
     fn test_accuracy() {
         let ctx = Arc::new(());
-        let acc: Box<dyn Metric<f32, (), 1>> = Box::new(AccuracyMetric {});
+        let acc: Box<dyn Metric<f32, 1>> = Box::new(AccuracyMetric {});
 
         let assert_acc = |input: &[f32], output: &[f32], accuracy: f32| {
-            let lst: Vec<(Gen1DArray<f32, (), 1>, Gen1DArray<f32, (), 1>)> = input
+            let lst: Vec<(Gen1DArray<f32, 1>, Gen1DArray<f32, 1>)> = input
                 .iter()
                 .zip(output.iter())
                 .map(|(i, o)| {
                     (
-                        Gen1DArray::<f32, (), 1>::from_array([[*i]], &ctx),
-                        Gen1DArray::<f32, (), 1>::from_array([[*o]], &ctx),
+                        Gen1DArray::<f32, 1>::from_array([[*i]], &ctx),
+                        Gen1DArray::<f32, 1>::from_array([[*o]], &ctx),
                     )
                 })
                 .collect();
-            let lst1: Vec<(&Gen1DArray<f32, (), 1>, &Gen1DArray<f32, (), 1>)> =
+            let lst1: Vec<(&Gen1DArray<f32, 1>, &Gen1DArray<f32, 1>)> =
                 lst.iter().map(|v| (&v.0, &v.1)).collect();
 
             let acc: TrainMetric<f32> = acc.calc_metric(&ctx, lst1.as_slice());

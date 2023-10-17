@@ -1,12 +1,10 @@
 use numbers::{
-    AddContext, FixedPointNumber, FromWithContext, Gen1DArray, Gen2DArray, Gen2DArrayNoContext,
-    NumberType,
+    AddContext, BooleanType, FixedPointNumber, FixedPointNumberNoContext, FromWithContext,
+    Gen1DArray, Gen2DArray, Gen2DArrayNoContext, NumberType,
 };
-use rand_distr::num_traits::MulAdd;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::LinkedList,
-    ops::{AddAssign, Mul, Shl, Shr, SubAssign},
     sync::{Arc, Mutex},
 };
 
@@ -21,43 +19,47 @@ pub type BoolFFFFLayer<
     const CURR_N: usize,
     AF,
     LOSS,
-> = FeedForwardFullyConnectedLayer<
-    FixedPointNumber<BITS, PRECISION, bool, ()>,
-    PREV_N,
-    CURR_N,
-    AF,
-    LOSS,
->;
+> = FeedForwardFullyConnectedLayer<bool, (), BITS, CALC_BITS, PRECISION, PREV_N, CURR_N, AF, LOSS>;
 
 pub struct FeedForwardFullyConnectedLayer<
-    T: NumberType,
+    T: BooleanType<C>,
+    C,
+    const BITS: usize,
+    const CALC_BITS: usize,
+    const PRECISION: usize,
     const PREV_N: usize,
     const CURR_N: usize,
-    AF: ActivationFn<T, CURR_N>,
-    LOSS: LossFunction<T, CURR_N>,
+    AF: ActivationFn<FixedPointNumber<CALC_BITS, PRECISION, T, C>, CURR_N>,
+    LOSS: LossFunction<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
 > {
     name: String,
-    b: Gen1DArray<T, CURR_N>,
-    weights: Gen2DArray<T, PREV_N, CURR_N>,
+    b: Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+    weights: Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N, CURR_N>,
     activation_fn: AF,
     loss_fn: LOSS,
-    weights_updates: Arc<Mutex<LinkedList<FFWeightUpdate<T, PREV_N, CURR_N>>>>,
+    weights_updates: Arc<
+        Mutex<LinkedList<FFWeightUpdate<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N, CURR_N>>>,
+    >,
 }
 
 impl<
-        T: NumberType,
+        T: BooleanType<C>,
+        C,
         const PREV_N: usize,
         const CURR_N: usize,
-        AF: ActivationFn<T, CURR_N>,
-        LOSS: LossFunction<T, CURR_N>,
-    > FeedForwardFullyConnectedLayer<T, PREV_N, CURR_N, AF, LOSS>
+        const BITS: usize,
+        const CALC_BITS: usize,
+        const PRECISION: usize,
+        AF: ActivationFn<FixedPointNumber<CALC_BITS, PRECISION, T, C>, CURR_N>,
+        LOSS: LossFunction<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+    > FeedForwardFullyConnectedLayer<T, C, BITS, CALC_BITS, PRECISION, PREV_N, CURR_N, AF, LOSS>
 {
     pub fn with_weights(
-        weights: [[T; CURR_N]; PREV_N],
-        b: [T; CURR_N],
+        weights: [[FixedPointNumber<BITS, PRECISION, T, C>; CURR_N]; PREV_N],
+        b: [FixedPointNumber<BITS, PRECISION, T, C>; CURR_N],
         activation_fn: AF,
         loss_fn: LOSS,
-        ctx: &Arc<T::ContextType>,
+        ctx: &Arc<C>,
     ) -> Self {
         Self {
             name: "unnamed".to_owned(),
@@ -72,18 +74,22 @@ impl<
 
 #[cfg(feature = "rand")]
 impl<
-        T: NumberType + FromWithContext<f32, T::ContextType> + Clone,
+        T: BooleanType<C>,
+        C,
         const PREV_N: usize,
         const CURR_N: usize,
-        AF: ActivationFn<T, CURR_N>,
-        LOSS: LossFunction<T, CURR_N>,
-    > FeedForwardFullyConnectedLayer<T, PREV_N, CURR_N, AF, LOSS>
+        const BITS: usize,
+        const CALC_BITS: usize,
+        const PRECISION: usize,
+        AF: ActivationFn<FixedPointNumber<CALC_BITS, PRECISION, T, C>, CURR_N>,
+        LOSS: LossFunction<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+    > FeedForwardFullyConnectedLayer<T, C, BITS, CALC_BITS, PRECISION, PREV_N, CURR_N, AF, LOSS>
 {
     pub fn new_random(
         rng: &mut dyn rand::RngCore,
         activation_fn: AF,
         loss_fn: LOSS,
-        ctx: &Arc<T::ContextType>,
+        ctx: &Arc<C>,
     ) -> Self {
         use rand::distributions::Distribution;
         let dist = rand_distr::Normal::new(0.0, 1.0).expect("Should create distribution");
@@ -92,7 +98,7 @@ impl<
             rng,
             |rng| {
                 let v: f32 = dist.sample(rng);
-                T::from_ctx(v, ctx)
+                FixedPointNumber::from_ctx(v, ctx)
             },
             ctx,
         );
@@ -100,7 +106,7 @@ impl<
             rng,
             |rng| {
                 let v: f32 = dist.sample(rng);
-                T::from_ctx(v, ctx)
+                FixedPointNumber::from_ctx(v, ctx)
             },
             ctx,
         );
@@ -110,64 +116,85 @@ impl<
 }
 
 impl<
-        T: 'static + NumberType + Send + Sync + AddContext<T::ContextType> + Clone,
+        T: 'static + BooleanType<C> + Send + Sync + AddContext<C>,
         const PREV_N: usize,
         const CURR_N: usize,
-        AF: ActivationFn<T, CURR_N>,
-        LOSS: LossFunction<T, CURR_N>,
-    > Layer<T, PREV_N, CURR_N> for FeedForwardFullyConnectedLayer<T, PREV_N, CURR_N, AF, LOSS>
+        const BITS: usize,
+        const CALC_BITS: usize,
+        const PRECISION: usize,
+        AF: ActivationFn<FixedPointNumber<CALC_BITS, PRECISION, T, C>, CURR_N>,
+        LOSS: LossFunction<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+        C: 'static + Send + Sync,
+    > Layer<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N, CURR_N>
+    for FeedForwardFullyConnectedLayer<T, C, BITS, CALC_BITS, PRECISION, PREV_N, CURR_N, AF, LOSS>
 where
     T: Serialize,
     T::FromType: DeserializeOwned,
-    T::ContextType: 'static + Send + Sync,
-    for<'a> T: AddAssign<&'a T>,
-    for<'a> T: SubAssign<&'a T>,
-    for<'a> &'a T: Mul<&'a T, Output = T>,
-    for<'a> &'a T: Shr<usize, Output = T>,
-    for<'a> &'a T: Shl<usize, Output = T>,
 {
     fn update_name(&mut self, name: &str) {
         self.name = name.to_owned();
     }
     fn execute_layer(
         &self,
-        ctx: &Arc<T::ContextType>,
-        arr: &Gen1DArray<T, PREV_N>,
-    ) -> Gen1DArray<T, CURR_N> {
-        let r = evaluate!(&self.name, "MulAdd", arr.mul_add(&self.weights, &self.b));
+        ctx: &Arc<C>,
+        arr: &Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N>,
+    ) -> Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N> {
         evaluate!(
             &self.name,
-            "ActivateMultiple",
-            self.activation_fn.activate_multiple(ctx, r)
+            "ExecuteLayer",
+            arr.multiply_add_execute(&self.weights, &self.b, |v| {
+                evaluate!(
+                    &self.name,
+                    "ActivateMultiple",
+                    self.activation_fn
+                        .activate_multiple(ctx, v)
+                        .apply(|v| v.update_size())
+                )
+            })
         )
     }
 
     fn pre_train(
         &self,
-        ctx: &Arc<T::ContextType>,
-        input: &Gen1DArray<T, PREV_N>,
-    ) -> (Gen1DArray<T, CURR_N>, Gen1DArray<T, CURR_N>) {
+        ctx: &Arc<C>,
+        input: &Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N>,
+    ) -> (
+        Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+        Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+    ) {
         let r = evaluate!(
             &self.name,
-            "PreTrain_MulAdd",
-            input.mul_add(&self.weights, &self.b)
+            "PreTrain",
+            input.multiply_add_execute(&self.weights, &self.b, |v| {
+                evaluate!(
+                    &self.name,
+                    "ActivateDerivMultiple",
+                    self.activation_fn.activate_and_derivative_multiple(ctx, v)
+                )
+            })
         );
-        evaluate!(
-            &self.name,
-            "PreTrain_ActivateMultiple",
-            self.activation_fn.activate_and_derivative_multiple(ctx, r)
+
+        (
+            r.0.apply(|v| v.update_size()),
+            r.1.apply(|v| v.update_size()),
         )
     }
 
     fn train(
         &self,
-        _ctx: &Arc<T::ContextType>,
-        input: &Gen1DArray<T, PREV_N>,
-        received: (Gen1DArray<T, CURR_N>, Gen1DArray<T, CURR_N>),
-        expected: super::LayerOutput<T, CURR_N>,
+        _ctx: &Arc<C>,
+        input: &Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N>,
+        received: (
+            Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+            Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+        ),
+        expected: super::LayerOutput<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
         learning_rate: &isize,
-    ) -> ErrorBackpropagation<T, PREV_N> {
-        let (apply_af, derivated_af): (Gen1DArray<T, CURR_N>, Gen1DArray<T, CURR_N>) = received;
+    ) -> ErrorBackpropagation<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N> {
+        let (apply_af, derivated_af): (
+            Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+            Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N>,
+        ) = received;
 
         let delta = match expected {
             LayerOutput::FinalOutput(exp) => {
@@ -205,7 +232,7 @@ where
             }
         );
         let input_trans = evaluate!(&self.name, "NeurChangeTrans", input.transpose());
-        let neurons_change: Gen2DArray<T, PREV_N, CURR_N> =
+        let neurons_change: Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N, CURR_N> =
             evaluate!(&self.name, "NeurChange", &input_trans * &lr_delta);
 
         // self.b = &self.b - &lr_delta;
@@ -225,11 +252,13 @@ where
         });
 
         /* START: Should be in section 'A', but due to generics restrictions must be calculated before being sent */
-        let curr_layer_error: Box<dyn FnOnce() -> Gen1DArray<T, PREV_N>> = {
+        let curr_layer_error: Box<
+            dyn FnOnce() -> Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N>,
+        > = {
             let weights_trans = self.weights.transpose();
             let _name = self.name.to_string();
 
-            Box::new(move || evaluate!(&_name, "DeltaMult", delta.mul(&weights_trans)))
+            Box::new(move || evaluate!(&_name, "DeltaMult", delta.mul_opt_rhs(weights_trans)))
         };
         /* END */
 
@@ -238,20 +267,20 @@ where
         }
     }
 
-    fn update_weights(&mut self, _ctx: &Arc<T::ContextType>) {
+    fn update_weights(&mut self, _ctx: &Arc<C>) {
         let mut lst = self
             .weights_updates
             .lock()
             .expect("Should be able to lock mutex");
 
-        // let len: T = FromWithContext::from_ctx(lst.len() as f32, ctx);
+        // let len: FixedPointNumber<BITS, PRECISION, T, C> = FromWithContext::from_ctx(lst.len() as f32, ctx);
 
-        let avg_weights: Gen2DArray<T, PREV_N, CURR_N> = evaluate!(
+        let avg_weights: Gen2DArray<FixedPointNumber<BITS, PRECISION, T, C>, PREV_N, CURR_N> = evaluate!(
             &self.name,
             "WeightUpdateWAvg",
             Gen2DArray::fold_add(lst.iter().map(|v| &v.weights))
         );
-        let avg_b: Gen1DArray<T, CURR_N> = evaluate!(
+        let avg_b: Gen1DArray<FixedPointNumber<BITS, PRECISION, T, C>, CURR_N> = evaluate!(
             &self.name,
             "WeightUpdateBAvg",
             Gen2DArray::fold_add(lst.iter().map(|v| &v.b))
@@ -283,14 +312,20 @@ where
         let val = serde_json::to_vec(&v).expect("Should serialize FFFFWeights");
         val
     }
-    fn set_weights(&mut self, ctx: &Arc<T::ContextType>, weights: Vec<u8>) {
+    fn set_weights(&mut self, ctx: &Arc<C>, weights: Vec<u8>) {
         let v: FFFFWeights =
             serde_json::from_slice(weights.as_slice()).expect("Should deserialize FFFFWeights");
 
-        let b: Gen2DArrayNoContext<T::FromType, 1, CURR_N> =
-            ciborium::from_reader(v.b.as_slice()).expect("Should deserialize b");
-        let weights: Gen2DArrayNoContext<T::FromType, PREV_N, CURR_N> =
-            ciborium::from_reader(v.weights.as_slice()).expect("Should deserialize weights");
+        let b: Gen2DArrayNoContext<
+            FixedPointNumberNoContext<BITS, PRECISION, T::FromType>,
+            1,
+            CURR_N,
+        > = ciborium::from_reader(v.b.as_slice()).expect("Should deserialize b");
+        let weights: Gen2DArrayNoContext<
+            FixedPointNumberNoContext<BITS, PRECISION, T::FromType>,
+            PREV_N,
+            CURR_N,
+        > = ciborium::from_reader(v.weights.as_slice()).expect("Should deserialize weights");
 
         self.b = AddContext::add_context(&b, &ctx);
         self.weights = AddContext::add_context(&weights, &ctx);

@@ -12,12 +12,7 @@ pub type EncryptedModel<
     const PRECISION: usize,
     const INPUT: usize,
     const OUTPUT: usize,
-> = neuralnetworks::Model<
-    EncryptedFixedPrecision<SIZE, PRECISION>,
-    EncryptedContext,
-    INPUT,
-    OUTPUT,
->;
+> = neuralnetworks::Model<EncryptedFixedPrecision<SIZE, PRECISION>, INPUT, OUTPUT>;
 
 pub type EncryptedFixedPrecision<const SIZE: usize, const PRECISION: usize> =
     FixedPointNumber<SIZE, PRECISION, EncryptedBit, EncryptedContext>;
