@@ -4,6 +4,7 @@ use ennigma::neuralnetworks::trainers::{
     ConsoleTrainer, FileTrainer, ForwardTrainerBuilder, StoreModelTrainer,
 };
 use ennigma::neuralnetworks::SerializableModel;
+use ennigma::numbers::SwitchContext;
 use ennigma::{
     prelude::*, DecryptionTrainer, FixedPrecisionAccuracyMetric,
     FixedPrecisionMeanSquareErrorMetric,
@@ -97,7 +98,7 @@ fn execute() {
         .add_trainer(FileTrainer::new("xor", "xor_train.txt"));
     let trainer = DecryptionTrainer::new(trainer_b.build(), &client_ctx);
 
-    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, ContextType, 1> + 'static)>> = vec![
+    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, 1> + 'static)>> = vec![
         Box::new(FixedPrecisionMeanSquareErrorMetric::<
             METRICS_BITS,
             METRICS_PRECISION,
@@ -114,7 +115,7 @@ fn execute() {
         1,
         (&input, &output),
         None,
-        metrics,
+        metrics.as_slice(),
         &trainer,
         &mut rng,
     );

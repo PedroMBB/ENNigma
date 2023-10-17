@@ -1,8 +1,6 @@
 use ennigma::neuralnetworks::metrics::Metric;
 use ennigma::neuralnetworks::metrics::QuadLossFunction;
-use ennigma::neuralnetworks::trainers::{
-    ConsoleTrainer, FileTrainer, ForwardTrainerBuilder, StoreModelTrainer,
-};
+use ennigma::neuralnetworks::trainers::{ConsoleTrainer, ForwardTrainerBuilder, StoreModelTrainer};
 use ennigma::neuralnetworks::SerializableModel;
 use ennigma::{
     prelude::*, DecryptionTrainer, FixedPrecisionAccuracyMetric,
@@ -52,7 +50,7 @@ fn execute() {
 
     let loss_fn = QuadLossFunction {};
 
-    let (train, val) = dataset_from_csv::<SIZE, PRECISION, INPUT, OUTPUT>(
+    let (train, val) = dataset_from_csv::<_, INPUT, OUTPUT>(
         "../../../datasets/banknote",
         "banknote.train.csv",
         "banknote.test.csv",
@@ -70,7 +68,7 @@ fn execute() {
             ),
         )
         .add_layer(
-            FFFFLayerType::<SIZE, LAYER_2, PRECISION, 4, 12, _, _>::new_random(
+            FFFFLayerType::<SIZE, LAYER_1, PRECISION, 4, 12, _, _>::new_random(
                 &mut rng,
                 af,
                 loss_fn,
@@ -80,12 +78,13 @@ fn execute() {
         .build(&server_ctx);
 
     let trainer_b = ForwardTrainerBuilder::new()
-        .add_trainer(ConsoleTrainer::new())
-        .add_trainer(StoreModelTrainer::new("banknote", "banknote"))
-        .add_trainer(FileTrainer::new("banknote", "banknote_train.txt"));
+    .add_trainer(ConsoleTrainer::new())
+    // .add_trainer(StoreModelTrainer::new("banknote", "banknote"))
+    // .add_trainer(FileTrainer::new("banknote", "banknote_train.txt"))
+    ;
     let trainer = DecryptionTrainer::new(trainer_b.build(), &client_ctx);
 
-    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, ContextType, 1> + 'static)>> = vec![
+    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, 1> + 'static)>> = vec![
         Box::new(FixedPrecisionMeanSquareErrorMetric::<
             METRICS_BITS,
             METRICS_PRECISION,
@@ -98,11 +97,11 @@ fn execute() {
 
     let _metrics = model.fit(
         20,
-        18,
+        14 * 1,
         -4,
         (&train.0, &train.1),
-        Some(val),
-        metrics,
+        Some(&val),
+        &metrics,
         &trainer,
         &mut rng,
     );

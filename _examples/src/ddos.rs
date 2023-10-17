@@ -52,7 +52,7 @@ fn execute() {
 
     let loss_fn = QuadLossFunction {};
 
-    let (train, val) = dataset_from_csv::<SIZE, PRECISION, INPUT, OUTPUT>(
+    let (train, val) = dataset_from_csv::<_, INPUT, OUTPUT>(
         "../../../datasets/cicddos2019",
         "69features.train.csv",
         "69features.test.csv",
@@ -101,7 +101,7 @@ fn execute() {
         .add_trainer(FileTrainer::new("ddos", "ddos_train.txt"));
     let trainer = DecryptionTrainer::new(trainer_b.build(), &client_ctx);
 
-    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, ContextType, 1> + 'static)>> = vec![
+    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, 1> + 'static)>> = vec![
         Box::new(FixedPrecisionMeanSquareErrorMetric::<
             METRICS_BITS,
             METRICS_PRECISION,
@@ -117,8 +117,8 @@ fn execute() {
         250,
         -7,
         (&train.0, &train.1),
-        Some(val),
-        metrics,
+        Some(&val),
+        &metrics,
         &trainer,
         &mut rng,
     );

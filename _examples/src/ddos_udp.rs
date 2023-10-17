@@ -1,8 +1,6 @@
 use ennigma::neuralnetworks::metrics::Metric;
 use ennigma::neuralnetworks::metrics::QuadLossFunction;
-use ennigma::neuralnetworks::trainers::{
-    ConsoleTrainer, FileTrainer, ForwardTrainerBuilder, StoreModelTrainer,
-};
+use ennigma::neuralnetworks::trainers::{FileTrainer, ForwardTrainerBuilder, StoreModelTrainer};
 use ennigma::neuralnetworks::SerializableModel;
 use ennigma::{
     prelude::*, DecryptionTrainer, FixedPrecisionAccuracyMetric,
@@ -15,13 +13,13 @@ use std::fs::File;
 const INPUT: usize = 7;
 const OUTPUT: usize = 1;
 
-const PRECISION: usize = 22;
+const PRECISION: usize = 20;
 const SIZE: usize = 5 + PRECISION + 1;
 const LAYER_1: usize = 5 + PRECISION + 1;
 // const LAYER_2: usize = 5 + PRECISION + 1;
 
-const METRICS_BITS: usize = 48;
-const METRICS_PRECISION: usize = 28;
+const METRICS_BITS: usize = 50;
+const METRICS_PRECISION: usize = 30;
 
 fn main() {
     if let Err(e) = dotenv::dotenv() {
@@ -52,10 +50,10 @@ fn execute() {
 
     let loss_fn = QuadLossFunction {};
 
-    let (train, val) = dataset_from_csv::<SIZE, PRECISION, INPUT, OUTPUT>(
+    let (train, val) = dataset_from_csv::<_, INPUT, OUTPUT>(
         "../../../datasets/cicddos2019",
-        "udp.train.csv",
-        "udp.test.csv",
+        "udp_25.train.csv",
+        "udp_25.test.csv",
         &client_ctx,
         &server_ctx,
     );
@@ -80,12 +78,12 @@ fn execute() {
         .build(&server_ctx);
 
     let trainer_b = ForwardTrainerBuilder::new()
-        .add_trainer(ConsoleTrainer::new())
+        // .add_trainer(ConsoleTrainer::new())
         .add_trainer(StoreModelTrainer::new("ddos", "ddos"))
         .add_trainer(FileTrainer::new("ddos", "ddos_train.txt"));
     let trainer = DecryptionTrainer::new(trainer_b.build(), &client_ctx);
 
-    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, ContextType, 1> + 'static)>> = vec![
+    let metrics: Vec<Box<(dyn Metric<NumberType<SIZE, PRECISION>, 1> + 'static)>> = vec![
         Box::new(FixedPrecisionMeanSquareErrorMetric::<
             METRICS_BITS,
             METRICS_PRECISION,
@@ -98,11 +96,11 @@ fn execute() {
 
     let _metrics = model.fit(
         5,
-        24 * 10,
+        16 * 10,
         -4,
         (&train.0, &train.1),
-        Some(val),
-        metrics,
+        Some(&val),
+        &metrics,
         &trainer,
         &mut rng,
     );
