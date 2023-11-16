@@ -1,6 +1,6 @@
 use ennigma::neuralnetworks::metrics::Metric;
 use ennigma::neuralnetworks::metrics::QuadLossFunction;
-use ennigma::neuralnetworks::trainers::{ConsoleTrainer, ForwardTrainerBuilder, StoreModelTrainer};
+use ennigma::neuralnetworks::trainers::*;
 use ennigma::neuralnetworks::SerializableModel;
 use ennigma::{
     prelude::*, DecryptionTrainer, FixedPrecisionAccuracyMetric,
@@ -16,7 +16,6 @@ const OUTPUT: usize = 1;
 const PRECISION: usize = 18;
 const SIZE: usize = 10 + PRECISION + 1;
 const LAYER_1: usize = 10 + PRECISION + 1;
-const LAYER_2: usize = 10 + PRECISION + 1;
 
 const METRICS_BITS: usize = 28;
 const METRICS_PRECISION: usize = 16;
@@ -51,7 +50,7 @@ fn execute() {
     let loss_fn = QuadLossFunction {};
 
     let (train, val) = dataset_from_csv::<_, INPUT, OUTPUT>(
-        "../../../datasets/banknote",
+        "./_examples/datasets",
         "banknote.train.csv",
         "banknote.test.csv",
         &client_ctx,

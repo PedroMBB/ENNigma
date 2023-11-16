@@ -1,4 +1,5 @@
 use neuralnetworks::{layers::BoolFFFFLayer, Model};
+use numbers::SwitchContext;
 use numbers::{BoolFixedPointNumber, Gen1DArray, Gen2DArray};
 use std::sync::Arc;
 
