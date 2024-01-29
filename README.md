@@ -46,3 +46,9 @@ cargo run --release --bin banknote --features plaintext
 ## License
 
 This software is distributed under the LGPL-3.0 license.
+
+## Resources
+
+### Master's Thesis
+
+Barbosa, P. (2023). *ENNigma: A Framework for Private Neural Networks* [Master's thesis, Polytechnic Institute of Porto, School of Engineering]. [http://hdl.handle.net/10400.22/23994](http://hdl.handle.net/10400.22/23994)
